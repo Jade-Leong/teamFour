@@ -22,7 +22,9 @@ import {
   statusFromCues,
   bodyVisible,
 } from './pregnancyRules'
-import { precacheAudio, playAudio } from './audio'
+import { precacheAudio, playAudio, speakText } from './audio'
+import { transcribeSpeech } from './services/elevenlabs'
+import { matchFaq } from './faq'
 
 // --- Session constants ------------------------------------------------------
 
@@ -71,6 +73,12 @@ export default function App() {
   const setsDoneRef = useRef(0)
   const frameCount = useRef(0)
 
+  // Between-sets voice Q&A
+  const qaActiveRef = useRef(false)   // pauses analysis while the Q&A panel is open
+  const mediaRecorderRef = useRef(null)
+  const audioChunksRef = useRef([])
+  const micStreamRef = useRef(null)
+
   // --- Flow / UI state ---
   const [screen, setScreen] = useState('disclaimer') // disclaimer|setup|instructions|coaching|complete
   const [disclaimerChecked, setDisclaimerChecked] = useState(false)
@@ -82,6 +90,14 @@ export default function App() {
   const [session, setSession] = useState({
     reps: 0,
     set: 1,
+  })
+  // Q&A panel: active + phase ('idle'|'recording'|'transcribing'|'answering') + text
+  const [qa, setQa] = useState({
+    active: false,
+    completedSet: 0,
+    phase: 'idle',
+    transcript: '',
+    answer: '',
   })
   const [status, setStatus] = useState({
     kneeAngle: '--',
@@ -105,6 +121,18 @@ export default function App() {
     return true
   }, [])
 
+  // --- Between-sets Q&A: pause analysis and offer a spoken question prompt ---
+  const enterQA = useCallback(() => {
+    const completedSet = setsDoneRef.current + 1
+    qaActiveRef.current = true
+    setSession((s) => ({ ...s, reps: REPS_PER_SET }))
+    setQa({ active: true, completedSet, phase: 'idle', transcript: '', answer: '' })
+    speakText(
+      `Set ${completedSet} done, nice work! Any questions for me? ` +
+        `Tap the microphone to ask, or continue when you're ready.`
+    )
+  }, [])
+
   // --- Per-frame analysis (stable; reads everything from refs) ---
   const onResults = useCallback((results) => {
     const canvas = canvasRef.current
@@ -126,6 +154,16 @@ export default function App() {
     }
 
     const tracked = bodyVisible(lm)
+
+    // Paused for the between-sets Q&A — keep drawing the skeleton, skip analysis.
+    if (qaActiveRef.current) {
+      ctx.save()
+      ctx.scale(-1, 1)
+      ctx.translate(-w, 0)
+      drawSkeleton(ctx, lm, STATUS_COLORS.good)
+      ctx.restore()
+      return
+    }
 
     const rules = rulesRef.current
     if (!rules) return
@@ -156,15 +194,9 @@ export default function App() {
         repsRef.current += 1
         reachedDepthRef.current = false
         if (repsRef.current >= REPS_PER_SET) {
-          // Set complete — roll straight into the next set, no rest break.
-          setsDoneRef.current += 1
-          repsRef.current = 0
-          if (setsDoneRef.current >= TOTAL_SETS) {
-            setSession((s) => ({ ...s, reps: 0 }))
-            setScreen('complete')
-          } else {
-            setSession((s) => ({ ...s, reps: 0, set: setsDoneRef.current + 1 }))
-          }
+          // Set complete — open the between-sets Q&A. The set advances (or the
+          // session finishes) when the user taps "continue" in continueFromQA.
+          enterQA()
         } else {
           setSession((s) => ({ ...s, reps: repsRef.current }))
         }
@@ -201,7 +233,7 @@ export default function App() {
         tracked: true,
       })
     }
-  }, [playCue])
+  }, [playCue, enterQA])
 
   // --- Camera lifecycle: only runs on the coaching screen ---
   useEffect(() => {
@@ -216,7 +248,9 @@ export default function App() {
     prevKneeRef.current = null
     lastCueTime.current = 0
     lastBreathTime.current = Date.now()
+    qaActiveRef.current = false
     setSession({ reps: 0, set: 1 })
+    setQa({ active: false, completedSet: 0, phase: 'idle', transcript: '', answer: '' })
     setLoading(true)
 
     precacheAudio() // session start
@@ -254,14 +288,89 @@ export default function App() {
       try {
         cameraRef.current?.stop()
         poseRef.current?.close()
+        micStreamRef.current?.getTracks().forEach((t) => t.stop())
       } catch (e) {
         console.warn('[cleanup]', e)
       }
     }
   }, [screen, onResults])
 
+  // --- Q&A push-to-talk handlers ---
+  const onRecordingStop = async () => {
+    micStreamRef.current?.getTracks().forEach((t) => t.stop())
+    const type = mediaRecorderRef.current?.mimeType || 'audio/webm'
+    const blob = new Blob(audioChunksRef.current, { type })
+
+    setQa((q) => ({ ...q, phase: 'transcribing' }))
+    const transcript = await transcribeSpeech(blob)
+    if (!transcript) {
+      setQa((q) => ({
+        ...q,
+        phase: 'idle',
+        transcript: '',
+        answer: "I didn't catch that — tap the mic and try again.",
+      }))
+      return
+    }
+
+    const { answer } = matchFaq(transcript)
+    setQa((q) => ({ ...q, phase: 'answering', transcript, answer }))
+    await speakText(answer)
+    setQa((q) => ({ ...q, phase: 'idle' }))
+  }
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      micStreamRef.current = stream
+      const mr = new MediaRecorder(stream)
+      audioChunksRef.current = []
+      mr.ondataavailable = (e) => { if (e.data.size) audioChunksRef.current.push(e.data) }
+      mr.onstop = onRecordingStop
+      mediaRecorderRef.current = mr
+      mr.start()
+      setQa((q) => ({ ...q, phase: 'recording', transcript: '', answer: '' }))
+    } catch (e) {
+      console.warn('[mic] error', e)
+      setQa((q) => ({
+        ...q,
+        phase: 'idle',
+        answer: 'I could not access the microphone — check your browser permissions.',
+      }))
+    }
+  }
+
+  const stopRecording = () => {
+    const mr = mediaRecorderRef.current
+    if (mr && mr.state !== 'inactive') mr.stop()
+  }
+
   // --- Handlers ---
+  const continueFromQA = () => {
+    const mr = mediaRecorderRef.current
+    if (mr && mr.state !== 'inactive') { mr.onstop = null; mr.stop() }
+    micStreamRef.current?.getTracks().forEach((t) => t.stop())
+
+    setsDoneRef.current += 1
+    repsRef.current = 0
+    reachedDepthRef.current = false
+    repPhaseRef.current = 'standing'
+    prevKneeRef.current = null
+    lastBreathTime.current = Date.now()
+    qaActiveRef.current = false
+    setQa({ active: false, completedSet: 0, phase: 'idle', transcript: '', answer: '' })
+
+    if (setsDoneRef.current >= TOTAL_SETS) {
+      setScreen('complete')
+    } else {
+      setSession((s) => ({ ...s, reps: 0, set: setsDoneRef.current + 1 }))
+    }
+  }
+
   const handleStop = () => {
+    qaActiveRef.current = false
+    micStreamRef.current?.getTracks().forEach((t) => t.stop())
+    setQa({ active: false, completedSet: 0, phase: 'idle', transcript: '', answer: '' })
     setScreen('setup')
   }
 
@@ -353,16 +462,45 @@ export default function App() {
           <div style={S.veil}>Loading camera & model…</div>
         )}
 
-        {!loading && !status.tracked && (
+        {!loading && !status.tracked && !qa.active && (
           <div style={S.trackingHint}>
             Step back so your whole body — head to feet — is in frame
           </div>
         )}
 
         {/* Active coaching cue */}
-        {status.cue !== 'none' && (
+        {!qa.active && status.cue !== 'none' && (
           <div style={{ ...S.cueBanner, borderColor: status.color, color: status.color }}>
             {PREGNANCY_PHRASES[status.cue]}
+          </div>
+        )}
+
+        {/* Between-sets voice Q&A */}
+        {qa.active && (
+          <div style={S.qaOverlay}>
+            <div style={S.qaTitle}>Set {qa.completedSet} done! 🎉</div>
+            <div style={S.qaSub}>Any questions? Tap the mic to ask — or continue.</div>
+
+            <button
+              style={{ ...S.micButton, ...(qa.phase === 'recording' ? S.micButtonRec : {}) }}
+              onClick={qa.phase === 'recording' ? stopRecording : startRecording}
+              disabled={qa.phase === 'transcribing' || qa.phase === 'answering'}
+            >
+              {qa.phase === 'recording'
+                ? '■ Stop & send'
+                : qa.phase === 'transcribing'
+                ? 'Transcribing…'
+                : qa.phase === 'answering'
+                ? 'Answering…'
+                : '🎤 Tap to ask'}
+            </button>
+
+            {qa.transcript && <div style={S.qaYou}>“{qa.transcript}”</div>}
+            {qa.answer && <div style={S.qaAnswer}>{qa.answer}</div>}
+
+            <button style={S.qaContinue} onClick={continueFromQA}>
+              {qa.completedSet >= TOTAL_SETS ? 'Finish session' : 'Continue to next set →'}
+            </button>
           </div>
         )}
 
@@ -701,6 +839,33 @@ const S = {
     position: 'absolute', bottom: 14, left: 14, background: 'rgba(0,0,0,.65)',
     border: '1px solid #333', borderRadius: 8, padding: '8px 12px',
     fontFamily: 'monospace', fontSize: 13, lineHeight: 1.7, pointerEvents: 'none',
+  },
+
+  qaOverlay: {
+    position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
+    alignItems: 'center', justifyContent: 'center', gap: 14,
+    background: 'rgba(10,10,14,.9)', borderRadius: 12, padding: 24, textAlign: 'center',
+  },
+  qaTitle: { fontSize: 26, fontWeight: 700, color: '#fff' },
+  qaSub: { fontSize: 15, color: '#b8b8c0' },
+  micButton: {
+    padding: '16px 30px', fontSize: 18, fontWeight: 700, borderRadius: 999,
+    border: '2px solid #7c4dff', background: '#7c4dff', color: '#fff', cursor: 'pointer',
+    minWidth: 200,
+  },
+  micButtonRec: { background: '#d50000', borderColor: '#d50000' },
+  qaYou: {
+    fontSize: 15, fontStyle: 'italic', color: '#c9b8ff', maxWidth: '80%',
+  },
+  qaAnswer: {
+    fontSize: 17, lineHeight: 1.5, color: '#eafff0', maxWidth: '85%',
+    background: 'rgba(0,230,118,.1)', border: '1px solid #2e7d52',
+    borderRadius: 12, padding: '12px 16px',
+  },
+  qaContinue: {
+    marginTop: 4, padding: '12px 22px', fontSize: 16, fontWeight: 600,
+    background: '#2c2c33', color: '#eee', border: '1px solid #3a3a42',
+    borderRadius: 12, cursor: 'pointer',
   },
 
   stopButton: {

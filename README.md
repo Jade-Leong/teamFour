@@ -23,8 +23,13 @@ Open the printed URL and allow camera access.
    (Bodyweight / Sumo / Chair-supported).
 3. **Positioning** — instructions for standing so the camera tracks you well.
 4. **Coaching** — live skeleton overlay, spoken cues, rep + set counter, and a
-   persistent **STOP** button. Sets advance automatically every 10 reps across
-   3 sets; stop any time with the STOP button.
+   persistent **STOP** button. Across 3 sets of 10 reps; stop any time.
+5. **Between-sets Q&A** — after each set (10/20/30 reps) the coach pauses and
+   asks "any questions?". Push-to-talk: tap the mic, speak, and your question is
+   transcribed (ElevenLabs speech-to-text), matched to a curated, medically-
+   grounded squat FAQ (`src/faq.js`), and the answer is spoken back (TTS). Tap
+   *continue* to resume the next set. Off-topic questions get a safe
+   "ask your provider" fallback — it never improvises medical advice.
 
 ## Coaching logic
 
@@ -55,7 +60,10 @@ cues to the console instead of speaking them.
 
 - `src/pregnancyRules.js` — rule tables, phrases, stop signs, and pure
   pose-analysis helpers.
-- `src/services/elevenlabs.js` — ElevenLabs TTS calls (synthesize + play).
-- `src/audio.js` — cue layer: pre-caches and plays cues, with graceful
-  fallback when ElevenLabs isn't configured.
-- `src/App.jsx` — flow, screens, MediaPipe wiring, rep counting, and overlay.
+- `src/services/elevenlabs.js` — ElevenLabs calls: TTS (synthesize + play) and
+  speech-to-text (`transcribeSpeech`).
+- `src/audio.js` — cue layer: plays cues + `speakText` for arbitrary phrases,
+  with graceful fallback when ElevenLabs isn't configured.
+- `src/faq.js` — curated pregnancy-squat FAQ + keyword matcher for the Q&A.
+- `src/App.jsx` — flow, screens, MediaPipe wiring, rep counting, overlay, and
+  the between-sets voice Q&A.
