@@ -38,7 +38,7 @@ function Results() {
 
   return (
     <div className="min-h-screen bg-background px-4 py-10">
-      <div className="mx-auto max-w-xl space-y-5 animate-fade-up">
+      <div className="mx-auto max-w-md space-y-5 animate-fade-up">
         <div className="text-center">
           <h1 className="font-serif text-4xl text-foreground">Great job, {profile.firstName}! 🎉</h1>
           <p className="mt-1 text-sm text-muted-foreground">You completed {s.name}</p>

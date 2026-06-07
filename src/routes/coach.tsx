@@ -26,7 +26,7 @@ function Coach() {
         <Heart className="h-5 w-5 text-primary" fill="currentColor" />
       </header>
 
-      <main className="mx-auto w-full max-w-2xl flex-1 space-y-4 px-4 py-6">
+      <main className="mx-auto w-full max-w-md flex-1 space-y-4 px-4 py-6">
         {messages.map((m, i) => (
           <div key={i} className={`flex animate-fade-up ${m.role === "user" ? "justify-end" : "justify-start"}`} style={{ animationDelay: `${i * 80}ms` }}>
             {m.role === "ai" ? (
@@ -51,7 +51,7 @@ function Coach() {
       </main>
 
       <div className="fixed bottom-16 left-0 right-0 border-t border-border bg-white/95 px-4 py-3 backdrop-blur">
-        <div className="mx-auto flex max-w-2xl items-center gap-2">
+        <div className="mx-auto flex max-w-md items-center gap-2">
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -62,7 +62,7 @@ function Coach() {
             <Send className="h-4 w-4" />
           </button>
         </div>
-        <p className="mx-auto mt-2 max-w-2xl text-center text-[10px] italic text-muted-foreground">
+        <p className="mx-auto mt-2 max-w-md text-center text-[10px] italic text-muted-foreground">
           Bloom AI is not a substitute for medical advice. Always follow your doctor's recommendations.
         </p>
       </div>

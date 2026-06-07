@@ -29,7 +29,7 @@ function Profile() {
 
   return (
     <div className="min-h-screen bg-background pb-28">
-      <main className="mx-auto max-w-2xl space-y-5 px-6 pt-8 animate-fade-up">
+      <main className="mx-auto max-w-md space-y-5 px-6 pt-8 animate-fade-up">
         <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary to-primary-light p-6 text-white shadow-bloom-lg">
           <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10 blur-2xl" />
           <div className="relative flex items-center gap-4">

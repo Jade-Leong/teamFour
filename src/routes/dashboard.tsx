@@ -30,7 +30,7 @@ function Dashboard() {
         <Logo />
       </header>
 
-      <main className="mx-auto max-w-2xl space-y-5 px-6 animate-fade-up">
+      <main className="mx-auto max-w-md space-y-5 px-6 animate-fade-up">
         <div>
           <h1 className="font-serif text-4xl text-foreground">
             Good morning, {profile.firstName} 🌸

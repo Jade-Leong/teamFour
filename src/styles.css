@@ -35,7 +35,7 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --font-serif: "Cormorant Garamond", serif;
+  --font-serif: "Plus Jakarta Sans", system-ui, sans-serif;
   --font-sans: "Plus Jakarta Sans", system-ui, sans-serif;
   --shadow-bloom: 0 4px 20px rgba(124, 92, 191, 0.10);
   --shadow-bloom-lg: 0 12px 40px rgba(124, 92, 191, 0.18);
@@ -79,7 +79,7 @@
     color: var(--color-foreground);
     -webkit-font-smoothing: antialiased;
   }
-  h1, h2, h3, h4, .font-serif { font-family: var(--font-serif); letter-spacing: -0.01em; }
+  h1, h2, h3, h4, .font-serif { font-family: var(--font-sans); font-weight: 700; letter-spacing: -0.025em; }
 }
 
 @utility btn-primary {

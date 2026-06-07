@@ -28,7 +28,7 @@ function Progress() {
         </button>
       </header>
 
-      <main className="mx-auto max-w-2xl space-y-4 px-6 pt-6 animate-fade-up">
+      <main className="mx-auto max-w-md space-y-4 px-6 pt-6 animate-fade-up">
         <div className="grid grid-cols-2 gap-3">
           <StatCard label="Workouts" value={String(stats.workoutsCompleted)} sub={`/ ${WEEKLY_WORKOUTS_GOAL} completed`} />
           <StatCard label="Minutes Active" value={String(stats.minutesActive)} sub={`/ ${MINUTES_GOAL} min`} bar={stats.minutesActive / MINUTES_GOAL} />
