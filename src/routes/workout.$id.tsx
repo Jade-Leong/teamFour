@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Volume2, X, Sparkles, Play, Camera as CameraIcon, Mic } from "lucide-react";
+import { Volume2, X, Sparkles, Play, Pause, Camera as CameraIcon, Mic } from "lucide-react";
 import { useUserProfile, type LastSession } from "@/context/UserProfileContext";
 import {
   PREGNANCY_PHRASES,
@@ -58,6 +58,7 @@ function LiveWorkout() {
   const setsDoneRef = useRef(0);
   const frameCount = useRef(0);
   const qaActiveRef = useRef(false);
+  const pausedRef = useRef(false);
   const drawUtilsRef = useRef<any>(null);
   const startedAtRef = useRef(0);
 
@@ -81,6 +82,7 @@ function LiveWorkout() {
   const [hipAngle, setHipAngle] = useState<string>("--");
   const [impactWarning, setImpactWarning] = useState(false);
   const [loadingCam, setLoadingCam] = useState(false);
+  const [paused, setPaused] = useState(false);
 
   const [qa, setQa] = useState({
     active: false,
@@ -88,16 +90,19 @@ function LiveWorkout() {
     phase: "idle" as "idle" | "recording" | "transcribing" | "answering",
     transcript: "",
     answer: "",
+    mode: "set" as "set" | "manual",
   });
 
   useEffect(() => {
     rulesRef.current = getRules(trimester, variation);
   }, []);
 
-  // Tick session timer
+  // Tick session timer (frozen while paused)
   useEffect(() => {
     if (!started) return;
-    const t = window.setInterval(() => setElapsed((e) => e + 1), 1000);
+    const t = window.setInterval(() => {
+      if (!pausedRef.current) setElapsed((e) => e + 1);
+    }, 1000);
     return () => window.clearInterval(t);
   }, [started]);
 
@@ -110,17 +115,24 @@ function LiveWorkout() {
     return true;
   }, []);
 
-  const enterQA = useCallback(() => {
-    const completedSet = setsDoneRef.current + 1;
+  // Pause analysis and open the voice Q&A.
+  //   mode "set"    -> automatic break after a completed set
+  //   mode "manual" -> user tapped "Ask a question" mid-workout
+  const openQA = useCallback((mode: "set" | "manual" = "set") => {
+    const completedSet =
+      mode === "set" ? setsDoneRef.current + 1 : setsDoneRef.current;
     qaActiveRef.current = true;
     impactStreakRef.current = 0;
     prevMotionRef.current = null;
     setImpactWarning(false);
-    setReps(REPS_PER_SET);
-    setQa({ active: true, completedSet, phase: "idle", transcript: "", answer: "" });
+    if (mode === "set") setReps(REPS_PER_SET);
+    setQa({ active: true, completedSet, phase: "idle", transcript: "", answer: "", mode });
     speakText(
-      `Set ${completedSet} done, nice work! Any questions for me? ` +
-        `Tap the microphone to ask, or continue when you're ready.`
+      mode === "set"
+        ? `Set ${completedSet} done, nice work! Any questions for me? ` +
+            `Tap the microphone to ask, or continue when you're ready.`
+        : "Ask me anything about your squat form, breathing, or workout. " +
+            "Tap the microphone when you are ready."
     );
   }, []);
 
@@ -150,7 +162,8 @@ function LiveWorkout() {
       const draw = drawUtilsRef.current;
       const POSE_CONNECTIONS = draw?.POSE_CONNECTIONS;
 
-      if (qaActiveRef.current) {
+      // Paused or in Q&A: keep drawing the skeleton, skip all analysis/coaching.
+      if (qaActiveRef.current || pausedRef.current) {
         ctx.save();
         ctx.scale(-1, 1);
         ctx.translate(-w, 0);
@@ -236,7 +249,7 @@ function LiveWorkout() {
           repsRef.current += 1;
           reachedDepthRef.current = false;
           if (repsRef.current >= REPS_PER_SET) {
-            enterQA();
+            openQA("set");
           } else {
             setReps(repsRef.current);
           }
@@ -277,7 +290,7 @@ function LiveWorkout() {
         setImpactWarning(impactActive);
       }
     },
-    [playCue, enterQA]
+    [playCue, openQA]
   );
 
   // Camera / pose lifecycle (only after user presses Begin)
@@ -417,18 +430,24 @@ function LiveWorkout() {
       mr.stop();
     }
     micStreamRef.current?.getTracks().forEach((t) => t.stop());
+    stopSpeaking();
+
+    const mode = qa.mode;
+    prevMotionRef.current = null;
+    impactStreakRef.current = 0;
+    lastBreathTime.current = Date.now();
+    lastImpactCueTime.current = 0;
+    qaActiveRef.current = false;
+    setQa({ active: false, completedSet: 0, phase: "idle", transcript: "", answer: "", mode: "set" });
+
+    // Manual question: just resume the current set where it left off.
+    if (mode === "manual") return;
 
     setsDoneRef.current += 1;
     repsRef.current = 0;
     reachedDepthRef.current = false;
     repPhaseRef.current = "standing";
     prevKneeRef.current = null;
-    prevMotionRef.current = null;
-    impactStreakRef.current = 0;
-    lastBreathTime.current = Date.now();
-    lastImpactCueTime.current = 0;
-    qaActiveRef.current = false;
-    setQa({ active: false, completedSet: 0, phase: "idle", transcript: "", answer: "" });
 
     if (setsDoneRef.current >= TOTAL_SETS) {
       finishSession();
@@ -436,6 +455,24 @@ function LiveWorkout() {
       setReps(0);
       setSetNum(setsDoneRef.current + 1);
     }
+  };
+
+  const togglePause = () => {
+    setPaused((p) => {
+      const next = !p;
+      pausedRef.current = next;
+      if (next) {
+        stopSpeaking();
+        setImpactWarning(false);
+        impactStreakRef.current = 0;
+        prevMotionRef.current = null;
+      } else {
+        // Resuming: don't let stale timing fire a burst of cues.
+        lastBreathTime.current = Date.now();
+        lastImpactCueTime.current = Date.now();
+      }
+      return next;
+    });
   };
 
   const finishSession = () => {
@@ -533,14 +570,14 @@ function LiveWorkout() {
               </div>
             )}
 
-            {started && !loadingCam && !tracked && !qa.active && (
+            {started && !loadingCam && !tracked && !qa.active && !paused && (
               <div className="absolute left-1/2 top-16 z-20 -translate-x-1/2 rounded-full border border-warning/60 bg-warning/15 px-3 py-1.5 text-xs text-warning">
                 Step back so your whole body fits in frame
               </div>
             )}
 
             {/* Active coaching cue banner */}
-            {started && !qa.active && activeCue !== "none" && PREGNANCY_PHRASES[activeCue] && (
+            {started && !qa.active && !paused && activeCue !== "none" && PREGNANCY_PHRASES[activeCue] && (
               <div
                 className="absolute left-1/2 top-16 z-20 max-w-[85%] -translate-x-1/2 rounded-2xl border-2 bg-black/70 px-4 py-2 text-center text-sm font-semibold backdrop-blur"
                 style={{ borderColor: statusColor, color: statusColor }}
@@ -550,18 +587,38 @@ function LiveWorkout() {
             )}
 
             {/* Additive high-impact warning */}
-            {started && !qa.active && impactWarning && activeCue !== "high_impact" && (
+            {started && !qa.active && !paused && impactWarning && activeCue !== "high_impact" && (
               <div className="absolute left-1/2 top-28 z-20 max-w-[85%] -translate-x-1/2 rounded-2xl border-2 border-destructive bg-black/70 px-4 py-2 text-center text-xs font-semibold text-destructive backdrop-blur">
                 {PREGNANCY_PHRASES.high_impact}
               </div>
             )}
 
-            {/* Between-sets Q&A overlay */}
+            {/* Paused overlay */}
+            {started && paused && !qa.active && (
+              <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 bg-black/80 px-6 text-center backdrop-blur">
+                <div className="font-serif text-2xl">Paused</div>
+                <div className="text-sm text-white/70">
+                  Take your time. Resume whenever you're ready.
+                </div>
+                <button
+                  onClick={togglePause}
+                  className="flex items-center gap-2 rounded-full bg-gradient-to-r from-primary to-primary-light px-7 py-3 text-sm font-semibold text-white shadow-bloom-lg transition-transform hover:scale-105"
+                >
+                  <Play className="h-4 w-4" fill="currentColor" /> Resume
+                </button>
+              </div>
+            )}
+
+            {/* Q&A overlay (between-sets + manual "ask a question") */}
             {qa.active && (
               <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 bg-black/85 px-6 text-center backdrop-blur">
-                <div className="font-serif text-2xl">Set {qa.completedSet} done! 🎉</div>
+                <div className="font-serif text-2xl">
+                  {qa.mode === "set" ? `Set ${qa.completedSet} done! 🎉` : "Ask a question 💬"}
+                </div>
                 <div className="text-sm text-white/70">
-                  Any questions? Tap the mic to ask — or continue.
+                  {qa.mode === "set"
+                    ? "Any questions? Tap the mic to ask — or continue."
+                    : "Tap the mic to ask about your form, breathing, or setup."}
                 </div>
                 <button
                   onClick={qa.phase === "recording" ? stopRecording : startRecording}
@@ -595,7 +652,11 @@ function LiveWorkout() {
                   onClick={continueFromQA}
                   className="rounded-full bg-white/10 px-6 py-2.5 text-sm font-semibold hover:bg-white/20"
                 >
-                  {qa.completedSet >= TOTAL_SETS ? "Finish session" : "Continue to next set →"}
+                  {qa.mode === "manual"
+                    ? "Back to workout"
+                    : qa.completedSet >= TOTAL_SETS
+                    ? "Finish session"
+                    : "Continue to next set →"}
                 </button>
               </div>
             )}
@@ -679,9 +740,18 @@ function LiveWorkout() {
             </div>
             <div className="relative mt-3 rounded-2xl bg-primary-tint p-4 text-sm text-primary-dark">
               {started
-                ? "Voice cues are powered by ElevenLabs. Between sets, tap the mic to ask me anything."
+                ? "Voice cues are powered by ElevenLabs. Tap below to ask me anything any time — no need to wait for a set break."
                 : "Press Begin when you're ready — I'll guide you through every rep with spoken cues."}
             </div>
+            {started && (
+              <button
+                onClick={() => openQA("manual")}
+                disabled={qa.active || paused}
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary to-primary-light px-4 py-2.5 text-sm font-semibold text-white shadow-bloom transition-transform hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Mic className="h-4 w-4" /> Ask a question
+              </button>
+            )}
             <div className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
               <Volume2 className="h-3 w-3" /> ElevenLabs Voice Coach
             </div>
@@ -694,6 +764,23 @@ function LiveWorkout() {
           <p className="flex-1 text-xs italic text-white/60">
             Stop if you feel pain, dizziness, bleeding, contractions, or anything unusual. Always follow your clinician's advice.
           </p>
+          {started && (
+            <button
+              onClick={togglePause}
+              disabled={qa.active}
+              className="flex items-center gap-2 rounded-full bg-white/10 px-5 py-2.5 text-sm font-semibold text-white hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {paused ? (
+                <>
+                  <Play className="h-4 w-4" fill="currentColor" /> Resume
+                </>
+              ) : (
+                <>
+                  <Pause className="h-4 w-4" /> Pause
+                </>
+              )}
+            </button>
+          )}
           <button
             onClick={handleEnd}
             className="flex items-center gap-2 rounded-full bg-destructive px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90"
