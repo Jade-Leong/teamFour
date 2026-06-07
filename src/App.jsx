@@ -2,7 +2,6 @@ import { useRef, useEffect, useState, useCallback } from 'react'
 import { Pose, POSE_CONNECTIONS } from '@mediapipe/pose'
 import { Camera } from '@mediapipe/camera_utils'
 import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils'
-import { startListening } from './services/speechToText'
 import { speakWithElevenLabs } from './services/elevenlabs'
 
 import {
