@@ -1,16 +1,24 @@
 // =============================================================================
 // audio.js
 //
-// Audio cue layer. ElevenLabs TTS is stubbed for now — everything is a
-// console.log placeholder. The shape (pre-cache at session start, then play by
-// key) is what the real ElevenLabs wiring will plug into:
+// Audio cue layer, wired to ElevenLabs TTS (src/services/elevenlabs.js).
 //
-//   precacheAudio() -> fetch + decode TTS for every phrase once, store blobs
-//   playAudio(key)  -> play the cached blob for `key`
+//   precacheAudio() -> synthesize every phrase once at session start, cache the
+//                      resulting <audio> elements so playback is instant.
+//   playAudio(key)  -> play the cached clip for `key` (or fetch on demand on a
+//                      cache miss). Falls back to a console.log placeholder when
+//                      ElevenLabs isn't configured, so the app still works for
+//                      demos without API credentials.
 // =============================================================================
 
 import { PREGNANCY_PHRASES } from './pregnancyRules'
+import {
+  synthesizeSpeech,
+  speakWithElevenLabs,
+  elevenLabsConfigured,
+} from './services/elevenlabs'
 
+// key -> HTMLAudioElement
 const cache = new Map()
 
 async function fetchTTS(text) {
