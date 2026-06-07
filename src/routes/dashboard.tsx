@@ -5,7 +5,7 @@ import { Logo } from "@/components/Logo";
 import { useUserProfile } from "@/context/UserProfileContext";
 
 export const Route = createFileRoute("/dashboard")({
-  head: () => ({ meta: [{ title: "Home · bloom" }] }),
+  head: () => ({ meta: [{ title: "Home · Juno" }] }),
   component: Dashboard,
 });
 
@@ -20,7 +20,7 @@ function Dashboard() {
       ? "Postpartum"
       : profile.trimester
       ? `${profile.trimester} Trimester${profile.weeksPregnant ? ` · ${profile.weeksPregnant} weeks pregnant` : ""}`
-      : "Welcome to bloom";
+      : "Welcome to Juno";
 
   const weeklyPct = Math.min(100, (stats.workoutsCompleted / WEEKLY_GOAL) * 100);
 

@@ -5,7 +5,7 @@ import { Logo } from "@/components/Logo";
 import { useUserProfile } from "@/context/UserProfileContext";
 
 export const Route = createFileRoute("/signup")({
-  head: () => ({ meta: [{ title: "Create account · bloom" }] }),
+  head: () => ({ meta: [{ title: "Create account · Juno" }] }),
   component: Signup,
 });
 

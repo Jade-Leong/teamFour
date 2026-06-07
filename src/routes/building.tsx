@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { Logo } from "@/components/Logo";
 
 export const Route = createFileRoute("/building")({
-  head: () => ({ meta: [{ title: "Building your workout · bloom" }] }),
+  head: () => ({ meta: [{ title: "Building your workout · Juno" }] }),
   component: Building,
 });
 

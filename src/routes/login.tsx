@@ -4,7 +4,7 @@ import { Eye, EyeOff } from "lucide-react";
 import { Logo } from "@/components/Logo";
 
 export const Route = createFileRoute("/login")({
-  head: () => ({ meta: [{ title: "Log in · bloom" }] }),
+  head: () => ({ meta: [{ title: "Log in · Juno" }] }),
   component: Login,
 });
 

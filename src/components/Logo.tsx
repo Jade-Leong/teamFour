@@ -7,7 +7,7 @@ export function Logo({ className = "" }: { className?: string }) {
       <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-primary-tint">
         <Heart className="h-4 w-4 text-primary" fill="currentColor" />
       </span>
-      <span className="font-serif text-2xl lowercase text-primary-dark">bloom</span>
+      <span className="font-serif text-2xl lowercase text-primary-dark">juno</span>
     </Link>
   );
 }

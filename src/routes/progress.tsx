@@ -5,7 +5,7 @@ import { BottomNav } from "@/components/BottomNav";
 import { useUserProfile } from "@/context/UserProfileContext";
 
 export const Route = createFileRoute("/progress")({
-  head: () => ({ meta: [{ title: "Progress · bloom" }] }),
+  head: () => ({ meta: [{ title: "Progress · Juno" }] }),
   component: Progress,
 });
 

@@ -4,7 +4,7 @@ import { BottomNav } from "@/components/BottomNav";
 import { useUserProfile } from "@/context/UserProfileContext";
 
 export const Route = createFileRoute("/profile")({
-  head: () => ({ meta: [{ title: "Profile · bloom" }] }),
+  head: () => ({ meta: [{ title: "Profile · Juno" }] }),
   component: Profile,
 });
 
@@ -48,7 +48,7 @@ function Profile() {
           <Row label="Workout Reminders" />
           <Row label="Voice Coach" value="Calm Female" />
           <Row label="Help & Support" />
-          <Row label="About Bloom" />
+          <Row label="About Juno" />
         </div>
 
         <button onClick={() => navigate({ to: "/" })} className="w-full py-4 text-sm font-semibold text-destructive hover:underline">
@@ -56,7 +56,7 @@ function Profile() {
         </button>
 
         <p className="text-center text-[11px] italic text-muted-foreground">
-          Bloom is not a substitute for medical advice. Always follow your doctor's recommendations.
+          Juno is not a substitute for medical advice. Always follow your doctor's recommendations.
         </p>
       </main>
 

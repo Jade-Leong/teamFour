@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Logo } from "@/components/Logo";
 
 export const Route = createFileRoute("/personalize")({
-  head: () => ({ meta: [{ title: "Personalize · bloom" }] }),
+  head: () => ({ meta: [{ title: "Personalize · Juno" }] }),
   component: Personalize,
 });
 

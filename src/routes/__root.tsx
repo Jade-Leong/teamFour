@@ -67,9 +67,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "bloom — Trauma-Informed Prenatal Fitness Coach" },
+      { title: "Juno — Trauma-Informed Prenatal Fitness Coach" },
       { name: "description", content: "AI-powered pregnancy exercise coaching for every stage of your journey." },
-      { property: "og:title", content: "bloom — Prenatal Fitness Coach" },
+      { property: "og:title", content: "Juno — Prenatal Fitness Coach" },
       { property: "og:description", content: "Real-time pose guidance meets trauma-informed support." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
