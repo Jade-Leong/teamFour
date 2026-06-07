@@ -1,24 +1,121 @@
-{
-  "name": "squat-form-analyzer",
-  "version": "1.0.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
-    
-  },
-  "dependencies": {
-    "@elevenlabs/elevenlabs-js": "^2.51.0",
-    "@mediapipe/camera_utils": "^0.3.1675466862",
-    "@mediapipe/drawing_utils": "^0.3.1675466124",
-    "@mediapipe/pose": "^0.5.1675469404",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
-  },
-  "devDependencies": {
-    "@vitejs/plugin-react": "^4.3.4",
-    "vite": "^6.0.0"
+import { useNavigate } from "react-router-dom";
+import { Share2 } from "lucide-react";
+import { useUserProfile } from "@/context/UserProfileContext";
+
+const labelMap = { good: "Good", great: "Great", needs: "Needs a little more" } as const;
+const colorMap = { good: "bg-success", great: "bg-success", needs: "bg-warning" } as const;
+
+function Results() {
+  const navigate = useNavigate();
+  const { profile } = useUserProfile();
+  const s = profile.lastSession;
+
+  if (!s) {
+    return (
+      <div className="min-h-screen bg-background px-4 py-10">
+        <div className="mx-auto max-w-md text-center">
+          <h1 className="font-serif text-3xl">No session yet</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Complete a workout to see your form score and feedback here.
+          </p>
+          <button onClick={() => navigate("/workouts")} className="btn-primary mt-6">
+            Browse workouts
+          </button>
+        </div>
+      </div>
+    );
   }
-  
+
+  const label =
+    s.formScore >= 85 ? "Great" : s.formScore >= 70 ? "Good" : s.formScore > 0 ? "Keep going" : "—";
+  const mm = Math.floor(s.durationSec / 60).toString().padStart(2, "0");
+  const ss = (s.durationSec % 60).toString().padStart(2, "0");
+
+  return (
+    <div className="min-h-screen bg-background px-4 py-10">
+      <div className="mx-auto max-w-md space-y-5 animate-fade-up">
+        <div className="text-center">
+          <h1 className="font-serif text-4xl text-foreground">Great job, {profile.firstName}! 🎉</h1>
+          <p className="mt-1 text-sm text-muted-foreground">You completed {s.name}</p>
+        </div>
+
+        <div className="card-bloom p-6 text-center">
+          <Ring value={s.formScore} label={label} />
+          <ul className="mt-6 space-y-3 text-left text-sm">
+            <Row color={colorMap[s.feedback.kneeAlignment]} label="Knee Alignment" value={labelMap[s.feedback.kneeAlignment]} />
+            <Row color={colorMap[s.feedback.backPosture]} label="Back Posture" value={labelMap[s.feedback.backPosture]} />
+            <Row color={colorMap[s.feedback.depth]} label="Depth" value={labelMap[s.feedback.depth]} />
+            <Row color={colorMap[s.feedback.coreEngagement]} label="Core Engagement" value={labelMap[s.feedback.coreEngagement]} />
+          </ul>
+        </div>
+
+        {s.formScore > 0 && (
+          <div className="rounded-2xl bg-primary-tint p-5">
+            <div className="flex gap-3">
+              <span className="text-xl">💡</span>
+              <p className="text-sm text-primary-dark">
+                Your movement looked controlled. Try engaging your core slightly more throughout the exercise.
+              </p>
+            </div>
+          </div>
+        )}
+
+        <div className="grid grid-cols-3 gap-3">
+          <Chip label="Duration" value={`${mm}:${ss}`} />
+          <Chip label="Reps" value={String(s.reps)} />
+          <Chip label="Sets" value={`${s.setsCompleted}/${s.totalSets}`} />
+        </div>
+
+        <div className="space-y-3 pt-2">
+          <button onClick={() => navigate("/dashboard")} className="btn-primary w-full">Finish</button>
+          <button className="flex w-full items-center justify-center gap-2 rounded-full border border-primary/20 bg-white py-3 text-sm font-semibold text-primary hover:bg-primary-tint">
+            <Share2 className="h-4 w-4" /> Share your progress
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
+
+function Ring({ value, label }: { value: number; label: string }) {
+  const r = 50, c = 2 * Math.PI * r, off = c - (value / 100) * c;
+  return (
+    <div className="relative mx-auto h-36 w-36">
+      <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90">
+        <circle cx="60" cy="60" r={r} stroke="var(--primary-tint)" strokeWidth="10" fill="none" />
+        <circle cx="60" cy="60" r={r} stroke="url(#gg)" strokeWidth="10" fill="none" strokeLinecap="round"
+          strokeDasharray={c} strokeDashoffset={off} />
+        <defs>
+          <linearGradient id="gg" x1="0" x2="1" y1="0" y2="1">
+            <stop offset="0%" stopColor="#7C5CBF" /><stop offset="100%" stopColor="#A78BDB" />
+          </linearGradient>
+        </defs>
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <div className="font-serif text-4xl text-primary-dark">{value}%</div>
+        <div className="text-xs font-semibold uppercase tracking-wide text-success">{label}</div>
+      </div>
+    </div>
+  );
+}
+
+function Row({ color, label, value }: { color: string; label: string; value: string }) {
+  return (
+    <li className="flex items-center justify-between">
+      <span className="flex items-center gap-3"><span className={`h-2.5 w-2.5 rounded-full ${color}`} />{label}</span>
+      <span className="text-muted-foreground">{value}</span>
+    </li>
+  );
+}
+
+function Chip({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="card-bloom p-3 text-center">
+      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="mt-0.5 font-serif text-lg text-primary-dark">{value}</div>
+    </div>
+  );
+}
+
+
+export default Results;

@@ -1,0 +1,123 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-light: var(--primary-light);
+  --color-primary-dark: var(--primary-dark);
+  --color-primary-tint: var(--primary-tint);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --font-serif: "Plus Jakarta Sans", system-ui, sans-serif;
+  --font-sans: "Plus Jakarta Sans", system-ui, sans-serif;
+  --shadow-bloom: 0 4px 20px rgba(124, 92, 191, 0.10);
+  --shadow-bloom-lg: 0 12px 40px rgba(124, 92, 191, 0.18);
+  --gradient-primary: linear-gradient(135deg, #7C5CBF, #A78BDB);
+  --gradient-soft: linear-gradient(135deg, #E8DEFF, #F8F5FE);
+}
+
+:root {
+  --radius: 1rem;
+  --background: oklch(0.984 0.012 295);
+  --foreground: oklch(0.22 0.01 280);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.22 0.01 280);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.22 0.01 280);
+  --primary: oklch(0.55 0.16 295);
+  --primary-foreground: oklch(1 0 0);
+  --primary-light: oklch(0.72 0.11 295);
+  --primary-dark: oklch(0.42 0.16 295);
+  --primary-tint: oklch(0.95 0.03 295);
+  --secondary: oklch(0.96 0.02 295);
+  --secondary-foreground: oklch(0.42 0.16 295);
+  --muted: oklch(0.95 0.015 295);
+  --muted-foreground: oklch(0.55 0.02 280);
+  --accent: oklch(0.93 0.04 295);
+  --accent-foreground: oklch(0.42 0.16 295);
+  --destructive: oklch(0.65 0.22 25);
+  --destructive-foreground: oklch(1 0 0);
+  --success: oklch(0.68 0.14 155);
+  --warning: oklch(0.78 0.16 65);
+  --border: oklch(0.92 0.02 295);
+  --input: oklch(0.92 0.02 295);
+  --ring: oklch(0.55 0.16 295);
+}
+
+@layer base {
+  * { border-color: var(--color-border); }
+  html, body { font-family: var(--font-sans); }
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3, h4, .font-serif { font-family: var(--font-sans); font-weight: 700; letter-spacing: -0.025em; }
+}
+
+@utility btn-primary {
+  background-image: var(--gradient-primary);
+  color: #fff;
+  border-radius: 9999px;
+  padding: 0.85rem 1.6rem;
+  font-weight: 600;
+  box-shadow: 0 6px 18px rgba(124, 92, 191, 0.28);
+  transition: transform 0.15s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+@utility btn-primary-hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 26px rgba(124, 92, 191, 0.34);
+}
+@utility card-bloom {
+  background: #fff;
+  border-radius: 20px;
+  box-shadow: var(--shadow-bloom);
+}
+@utility input-bloom {
+  border-radius: 14px;
+  border: 1px solid var(--color-border);
+  background: #fff;
+  padding: 0.75rem 1rem;
+  width: 100%;
+  font-size: 0.95rem;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-up { animation: fade-up 0.4s ease-out both; }
+
+@keyframes float-soft {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-6px); }
+}
+.animate-float { animation: float-soft 4s ease-in-out infinite; }
