@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Logo } from "@/components/Logo";
+import landingHero from "@/assets/landing-hero.jpg";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -19,9 +20,9 @@ function Landing() {
         <div className="relative overflow-hidden rounded-[2rem] shadow-bloom-lg flex-1 min-h-[560px] flex flex-col justify-between p-6 bg-gradient-to-br from-[#E8DEFF] via-[#F2E8FF] to-[#FFE8F0]">
           {/* Background image */}
           <img
-            src="https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=900&q=80"
-            alt="Pregnant woman in calm pose"
-            className="absolute inset-0 h-full w-full object-cover opacity-95"
+            src={landingHero}
+            alt="Expecting mother in soft lavender light"
+            className="absolute inset-0 h-full w-full object-cover"
           />
           {/* Bottom gradient overlay for text legibility */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
