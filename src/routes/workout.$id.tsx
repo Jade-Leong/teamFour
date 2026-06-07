@@ -66,7 +66,7 @@ function LiveWorkout() {
       },
     };
     if (started && elapsed > 0) recordSession(session);
-    navigate({ to: "/results" });
+    navigate({ to: "/mood" });
   };
 
   const mm = Math.floor(elapsed / 60).toString().padStart(2, "0");

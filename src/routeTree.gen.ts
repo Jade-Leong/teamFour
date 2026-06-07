@@ -16,6 +16,7 @@ import { Route as ProgressRouteImport } from './routes/progress'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as PersonalizeRouteImport } from './routes/personalize'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
+import { Route as MoodRouteImport } from './routes/mood'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as CoachRouteImport } from './routes/coach'
@@ -58,6 +59,11 @@ const OnboardingRoute = OnboardingRouteImport.update({
   path: '/onboarding',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MoodRoute = MoodRouteImport.update({
+  id: '/mood',
+  path: '/mood',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
@@ -95,6 +101,7 @@ export interface FileRoutesByFullPath {
   '/coach': typeof CoachRoute
   '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
+  '/mood': typeof MoodRoute
   '/onboarding': typeof OnboardingRoute
   '/personalize': typeof PersonalizeRoute
   '/profile': typeof ProfileRoute
@@ -110,6 +117,7 @@ export interface FileRoutesByTo {
   '/coach': typeof CoachRoute
   '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
+  '/mood': typeof MoodRoute
   '/onboarding': typeof OnboardingRoute
   '/personalize': typeof PersonalizeRoute
   '/profile': typeof ProfileRoute
@@ -126,6 +134,7 @@ export interface FileRoutesById {
   '/coach': typeof CoachRoute
   '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
+  '/mood': typeof MoodRoute
   '/onboarding': typeof OnboardingRoute
   '/personalize': typeof PersonalizeRoute
   '/profile': typeof ProfileRoute
@@ -143,6 +152,7 @@ export interface FileRouteTypes {
     | '/coach'
     | '/dashboard'
     | '/login'
+    | '/mood'
     | '/onboarding'
     | '/personalize'
     | '/profile'
@@ -158,6 +168,7 @@ export interface FileRouteTypes {
     | '/coach'
     | '/dashboard'
     | '/login'
+    | '/mood'
     | '/onboarding'
     | '/personalize'
     | '/profile'
@@ -173,6 +184,7 @@ export interface FileRouteTypes {
     | '/coach'
     | '/dashboard'
     | '/login'
+    | '/mood'
     | '/onboarding'
     | '/personalize'
     | '/profile'
@@ -189,6 +201,7 @@ export interface RootRouteChildren {
   CoachRoute: typeof CoachRoute
   DashboardRoute: typeof DashboardRoute
   LoginRoute: typeof LoginRoute
+  MoodRoute: typeof MoodRoute
   OnboardingRoute: typeof OnboardingRoute
   PersonalizeRoute: typeof PersonalizeRoute
   ProfileRoute: typeof ProfileRoute
@@ -250,6 +263,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OnboardingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/mood': {
+      id: '/mood'
+      path: '/mood'
+      fullPath: '/mood'
+      preLoaderRoute: typeof MoodRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
       id: '/login'
       path: '/login'
@@ -301,6 +321,7 @@ const rootRouteChildren: RootRouteChildren = {
   CoachRoute: CoachRoute,
   DashboardRoute: DashboardRoute,
   LoginRoute: LoginRoute,
+  MoodRoute: MoodRoute,
   OnboardingRoute: OnboardingRoute,
   PersonalizeRoute: PersonalizeRoute,
   ProfileRoute: ProfileRoute,
