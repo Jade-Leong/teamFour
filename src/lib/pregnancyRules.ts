@@ -53,6 +53,7 @@ export const PREGNANCY_PHRASES: Record<string, string> = {
   knees_over_toes:
     "Keep your weight in your heels, your knees are going past your toes",
   back_straight: "Keep your back nice and straight, lift through your chest",
+  high_impact: "Slow down right now and move more carefully",
   too_deep: "That's deep enough, no need to go further",
   good_depth: "Beautiful depth, perfect for you",
   knees_caving: "Gently press your knees outward, track them over your toes",
@@ -61,6 +62,89 @@ export const PREGNANCY_PHRASES: Record<string, string> = {
   squeeze_glutes: "Squeeze your glutes as you stand up",
   good_form: "You're doing amazing",
 };
+
+// Medically-reviewed Healthline squat demos used as a mirroring reference.
+// Source: https://www.healthline.com/health/pregnancy/squats
+const HL_GIF_BASE =
+  "https://images-prod.healthline.com/hlcmsresource/images/topic_centers/Fitness-Exercise/";
+
+export const FORM_GIFS = {
+  bodyweight: {
+    label: "Bodyweight squat",
+    url:
+      HL_GIF_BASE +
+      "400x400_How_to_Perform_Squats_Safely_During_Pregnancy_Bodyweight_Squats.gif",
+  },
+  sumo: {
+    label: "Sumo squat",
+    url:
+      HL_GIF_BASE +
+      "400x400_How_To_Perform_Squats_Safely_During_Pregnancy_Sumo_Squats.gif",
+  },
+  wall: {
+    label: "Wall squat with ball",
+    url:
+      HL_GIF_BASE +
+      "400x400_How_To_Perform_Squats_Safely_During_Pregnancy_Squats_Against_Wall_with_Exercise_Ball.gif",
+  },
+  deep: {
+    label: "Deep squat hold",
+    url:
+      HL_GIF_BASE +
+      "400x400_How_To_Perform_Squats_Safely_During_Pregnancy_Deep_Squat_Hold_with_Pelvic_Floor_Contraction.gif",
+  },
+  chair: {
+    label: "Chair squat",
+    url:
+      HL_GIF_BASE +
+      "400x400_How_to_Perform_Squats_Safely_During_Pregnancy_Chair_Squats.gif",
+  },
+} as const;
+
+export const CUE_FORM_REFERENCE: Record<string, { tip: string }> = {
+  knees_over_toes: {
+    tip: "Sit your hips back and keep your weight in your heels — knees stay over your ankles.",
+  },
+  back_straight: {
+    tip: "Keep your chest lifted and spine long, like sliding down a wall.",
+  },
+  knees_caving: {
+    tip: "Gently press both knees outward so they track over your toes.",
+  },
+  widen_stance: {
+    tip: "Step your feet wider with toes turned slightly out for balance.",
+  },
+  narrow_stance: { tip: "Bring your feet to about shoulder-width." },
+  chest_up: { tip: "Lift tall through your chest and take your time." },
+  too_deep: { tip: "Stop at a comfortable depth — chair height is plenty." },
+  good_depth: { tip: "Beautiful depth — controlled and steady." },
+  squeeze_glutes: {
+    tip: "Drive through your heels and squeeze your glutes to stand tall.",
+  },
+  good_form: { tip: "You're nailing it — smooth, controlled reps." },
+  high_impact: {
+    tip: "Slow down — keep every rep smooth and controlled, no bouncing.",
+  },
+  remember_to_breathe: { tip: "Exhale as you rise — don't hold your breath." },
+};
+
+const VARIATION_TIPS: Record<Variation, string> = {
+  bodyweight:
+    "Feet shoulder-width, weight in your heels, chest tall. Mirror the pace below.",
+  sumo:
+    "Wide stance, toes turned out, knees tracking over your toes. Mirror the pace below.",
+  chair:
+    "Sit back toward the chair with control, then drive up through your heels.",
+};
+
+// Mirroring GIF is always the bodyweight squat (clearest full-body demo);
+// the tip tracks the active cue, or the variation when idle.
+export function formReferenceFor(cue: string | null, variation: Variation) {
+  const entry = cue && cue !== "none" ? CUE_FORM_REFERENCE[cue] : null;
+  const tip =
+    entry?.tip || VARIATION_TIPS[variation] || VARIATION_TIPS.bodyweight;
+  return { gif: FORM_GIFS.bodyweight, tip };
+}
 
 export const CUE_PRIORITY = [
   "knees_over_toes",
@@ -76,7 +160,11 @@ export const CUE_PRIORITY = [
   "good_form",
 ];
 
-export const CRITICAL_CUES = new Set(["knees_over_toes", "back_straight"]);
+export const CRITICAL_CUES = new Set([
+  "high_impact",
+  "knees_over_toes",
+  "back_straight",
+]);
 export const ADJUST_CUES = new Set([
   "knees_caving",
   "widen_stance",
@@ -105,6 +193,10 @@ export const LM = {
 };
 
 export const STANDING_ANGLE = 160;
+// torso lengths per second; only true jump/jerk motion
+export const IMPACT_VELOCITY_THRESHOLD = 5.0;
+// ms between spoken impact warnings
+export const IMPACT_WARNING_COOLDOWN = 7000;
 const KNEE_OVER_TOES_THRESHOLD = 0.05;
 const BACK_LEAN_RATIO = 0.35;
 const STANCE_MIN_RATIO = 0.9;
@@ -130,6 +222,35 @@ const dist = (a: Pt, b: Pt) => Math.hypot(a.x - b.x, a.y - b.y);
 function kneeForwardTravel(knee: Pt, ankle: Pt, toe: Pt) {
   const forward = Math.sign(toe.x - ankle.x) || 1;
   return (knee.x - ankle.x) * forward;
+}
+
+export type TorsoMotionSample = {
+  center: { x: number; y: number };
+  torsoLength: number;
+  time: number;
+};
+
+export function getTorsoMotionSample(lm: Pt[]) {
+  const shoulderMid = mid(lm[LM.LEFT_SHOULDER], lm[LM.RIGHT_SHOULDER]);
+  const hipMid = mid(lm[LM.LEFT_HIP], lm[LM.RIGHT_HIP]);
+  return {
+    center: mid(shoulderMid, hipMid),
+    torsoLength: dist(shoulderMid, hipMid) || 1e-6,
+  };
+}
+
+export function getTorsoVelocity(
+  currentSample: TorsoMotionSample,
+  previousSample: TorsoMotionSample | null
+) {
+  if (!previousSample) return 0;
+  const elapsedMs = currentSample.time - previousSample.time;
+  if (!Number.isFinite(elapsedMs) || elapsedMs <= 0) return 0;
+  const elapsedSeconds = elapsedMs / 1000;
+  const distance = dist(currentSample.center, previousSample.center);
+  const scale =
+    (currentSample.torsoLength + previousSample.torsoLength) / 2 || 1e-6;
+  return distance / scale / elapsedSeconds;
 }
 
 export function bodyVisible(lm: Pt[]) {
@@ -215,8 +336,11 @@ export function getFormCues(
     inSquat,
   } = metrics;
 
+  // Too narrow is measured against shoulder width (the original baseline) so
+  // a wide variation's target doesn't make a normal stance read as "too narrow".
+  // Too wide is measured against the variation's wider target (pelvic strain).
   const targetStance = shoulderWidth * (rules.stanceMultiplier ?? 1);
-  if (ankleWidth < targetStance * STANCE_MIN_RATIO) cues.push("widen_stance");
+  if (ankleWidth < shoulderWidth * STANCE_MIN_RATIO) cues.push("widen_stance");
   else if (ankleWidth > targetStance * STANCE_MAX_RATIO) cues.push("narrow_stance");
 
   if (inSquat) {

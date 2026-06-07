@@ -6,14 +6,20 @@ import {
   PREGNANCY_PHRASES,
   STANDING_ANGLE,
   STATUS_COLORS,
+  IMPACT_VELOCITY_THRESHOLD,
+  IMPACT_WARNING_COOLDOWN,
   bodyVisible,
+  formReferenceFor,
   getFormCues,
   getPoseMetrics,
   getRules,
+  getTorsoMotionSample,
+  getTorsoVelocity,
   pickCue,
   statusFromCues,
   LM,
   type Trimester,
+  type TorsoMotionSample,
   type Variation,
 } from "@/lib/pregnancyRules";
 import { matchFaq } from "@/lib/faq";
@@ -42,6 +48,9 @@ function LiveWorkout() {
   const rulesRef = useRef<any>(null);
   const lastCueTime = useRef(0);
   const lastBreathTime = useRef(0);
+  const lastImpactCueTime = useRef(0);
+  const impactStreakRef = useRef(0);
+  const prevMotionRef = useRef<TorsoMotionSample | null>(null);
   const prevKneeRef = useRef<number | null>(null);
   const repPhaseRef = useRef<"standing" | "down">("standing");
   const reachedDepthRef = useRef(false);
@@ -70,6 +79,7 @@ function LiveWorkout() {
   const [statusColor, setStatusColor] = useState<string>(STATUS_COLORS.good);
   const [kneeAngle, setKneeAngle] = useState<string>("--");
   const [hipAngle, setHipAngle] = useState<string>("--");
+  const [impactWarning, setImpactWarning] = useState(false);
   const [loadingCam, setLoadingCam] = useState(false);
 
   const [qa, setQa] = useState({
@@ -103,6 +113,9 @@ function LiveWorkout() {
   const enterQA = useCallback(() => {
     const completedSet = setsDoneRef.current + 1;
     qaActiveRef.current = true;
+    impactStreakRef.current = 0;
+    prevMotionRef.current = null;
+    setImpactWarning(false);
     setReps(REPS_PER_SET);
     setQa({ active: true, completedSet, phase: "idle", transcript: "", answer: "" });
     speakText(
@@ -159,7 +172,27 @@ function LiveWorkout() {
       const rules = rulesRef.current;
       if (!rules) return;
 
+      const nowImpact = Date.now();
       const metrics = getPoseMetrics(lm);
+      const motionSample: TorsoMotionSample = {
+        ...getTorsoMotionSample(lm),
+        time: nowImpact,
+      };
+      const motionVelocity = getTorsoVelocity(motionSample, prevMotionRef.current);
+      // Debounce: require two consecutive fast frames before flagging impact, so
+      // a single jerky frame doesn't trip the warning.
+      if (isTracked && motionVelocity >= IMPACT_VELOCITY_THRESHOLD) {
+        impactStreakRef.current += 1;
+      } else {
+        impactStreakRef.current = 0;
+      }
+      const impactActive = isTracked && impactStreakRef.current >= 2;
+      const impactWarningReady =
+        impactActive &&
+        nowImpact - lastImpactCueTime.current >= IMPACT_WARNING_COOLDOWN;
+
+      // Form feedback drives the status color and rep tracking. High impact is
+      // surfaced as an *additive* warning (banner + spoken cue) below.
       const cues = isTracked ? getFormCues(metrics, rules, prevKneeRef.current) : [];
       const statusKey = statusFromCues(cues);
       const color = STATUS_COLORS[statusKey];
@@ -186,7 +219,12 @@ function LiveWorkout() {
       ctx.restore();
 
       if (!isTracked) {
-        if (mountedRef.current) setTracked(false);
+        if (mountedRef.current) {
+          setTracked(false);
+          setImpactWarning(false);
+        }
+        prevMotionRef.current = null;
+        impactStreakRef.current = 0;
         return;
       }
 
@@ -213,12 +251,18 @@ function LiveWorkout() {
 
       const breathDue = now - lastBreathTime.current >= rules.breathInterval;
       const candidateCues = breathDue ? [...cues, "remember_to_breathe"] : cues;
+      // Form cues take priority; high-impact only speaks when there's no form
+      // cue, so it stays additive rather than overriding.
       const chosen = pickCue(candidateCues);
-      if (chosen) {
+      if (impactActive && !chosen && impactWarningReady) {
+        const fired = playCue("high_impact");
+        if (fired) lastImpactCueTime.current = now;
+      } else if (chosen) {
         const fired = playCue(chosen);
         if (fired && chosen === "remember_to_breathe") lastBreathTime.current = now;
       }
 
+      prevMotionRef.current = motionSample;
       prevKneeRef.current = avgKnee;
 
       frameCount.current += 1;
@@ -226,8 +270,11 @@ function LiveWorkout() {
         setTracked(true);
         setKneeAngle(avgKnee.toFixed(0));
         setHipAngle(metrics.hipAngle.toFixed(0));
-        setActiveCue(chosen ?? "none");
+        setActiveCue(
+          chosen ?? (impactWarningReady ? "high_impact" : "none")
+        );
         setStatusColor(color);
+        setImpactWarning(impactActive);
       }
     },
     [playCue, enterQA]
@@ -244,12 +291,16 @@ function LiveWorkout() {
     reachedDepthRef.current = false;
     repPhaseRef.current = "standing";
     prevKneeRef.current = null;
+    prevMotionRef.current = null;
+    impactStreakRef.current = 0;
     lastCueTime.current = 0;
     lastBreathTime.current = Date.now();
+    lastImpactCueTime.current = 0;
     qaActiveRef.current = false;
     startedAtRef.current = Date.now();
     setReps(0);
     setSetNum(1);
+    setImpactWarning(false);
 
     let cancelled = false;
     (async () => {
@@ -372,7 +423,10 @@ function LiveWorkout() {
     reachedDepthRef.current = false;
     repPhaseRef.current = "standing";
     prevKneeRef.current = null;
+    prevMotionRef.current = null;
+    impactStreakRef.current = 0;
     lastBreathTime.current = Date.now();
+    lastImpactCueTime.current = 0;
     qaActiveRef.current = false;
     setQa({ active: false, completedSet: 0, phase: "idle", transcript: "", answer: "" });
 
@@ -495,6 +549,13 @@ function LiveWorkout() {
               </div>
             )}
 
+            {/* Additive high-impact warning */}
+            {started && !qa.active && impactWarning && activeCue !== "high_impact" && (
+              <div className="absolute left-1/2 top-28 z-20 max-w-[85%] -translate-x-1/2 rounded-2xl border-2 border-destructive bg-black/70 px-4 py-2 text-center text-xs font-semibold text-destructive backdrop-blur">
+                {PREGNANCY_PHRASES.high_impact}
+              </div>
+            )}
+
             {/* Between-sets Q&A overlay */}
             {qa.active && (
               <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 bg-black/85 px-6 text-center backdrop-blur">
@@ -574,6 +635,8 @@ function LiveWorkout() {
 
         {/* Sidebar */}
         <aside className="space-y-4 text-foreground">
+          <FormReference cue={activeCue} color={statusColor} variation={variation} />
+
           <div className="card-bloom p-5">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold">Live Feedback</h3>
@@ -648,6 +711,52 @@ function Stat({ v, l }: { v: string; l: string }) {
     <div className="flex-1 rounded-2xl bg-white/10 px-3 py-2 text-center backdrop-blur">
       <div className="text-lg font-bold">{v}</div>
       <div className="text-[10px] text-white/60">{l}</div>
+    </div>
+  );
+}
+
+function FormReference({
+  cue,
+  color,
+  variation,
+}: {
+  cue: string;
+  color: string;
+  variation: Variation;
+}) {
+  const { gif, tip } = formReferenceFor(cue, variation);
+  const correcting = cue && cue !== "none" && cue !== "good_form";
+  return (
+    <div className="card-bloom p-5">
+      <h3 className="font-semibold">Correct Form</h3>
+      <p className="mt-1 text-xs text-muted-foreground">
+        {correcting
+          ? "Mirror this to fix your form"
+          : "Match this demonstration as you move"}
+      </p>
+      <div
+        className="relative mt-3 overflow-hidden rounded-2xl border-2 bg-primary-tint"
+        style={{ borderColor: color }}
+      >
+        <img
+          src={gif.url}
+          alt={gif.label}
+          loading="lazy"
+          className="block w-full aspect-square object-cover"
+        />
+        <div className="absolute bottom-2 left-2 rounded-full bg-black/50 px-2 py-0.5 text-[10px] font-semibold text-white backdrop-blur">
+          {gif.label}
+        </div>
+      </div>
+      <div
+        className="mt-3 rounded-xl bg-primary-tint p-3 text-xs text-primary-dark"
+        style={{ borderLeft: `4px solid ${color}` }}
+      >
+        {tip}
+      </div>
+      <p className="mt-2 text-[10px] text-muted-foreground">
+        Demonstrations via Healthline
+      </p>
     </div>
   );
 }

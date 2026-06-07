@@ -1,7 +1,15 @@
 // Client-side helpers for ElevenLabs TTS / STT via our server routes.
 
 const cueLastPlayed = new Map<string, number>();
-const PER_CUE_COOLDOWN = 8000;
+// arbitrary text -> last time it was spoken (Q&A / FAQ answers)
+const lastSpokenByText = new Map<string, number>();
+// Wall-clock time the last audio (cue or text) was sent to TTS — used to
+// serialize speech so clips don't overlap and talk over each other.
+let lastSpeakAt = 0;
+const PER_CUE_COOLDOWN = 7000;
+// Minimum gap between repeating the same text, and a global gap between clips.
+const TTS_COOLDOWN = 7000;
+const SPEAK_GAP = 2500;
 let currentAudio: HTMLAudioElement | null = null;
 
 async function fetchTTS(text: string): Promise<HTMLAudioElement | null> {
@@ -27,7 +35,10 @@ export function playCueText(cueKey: string, text: string) {
   const now = Date.now();
   const last = cueLastPlayed.get(cueKey) ?? 0;
   if (now - last < PER_CUE_COOLDOWN) return;
+  // Global gap so a new cue never starts on top of speech still playing.
+  if (now - lastSpeakAt < SPEAK_GAP) return;
   cueLastPlayed.set(cueKey, now);
+  lastSpeakAt = now;
   fetchTTS(text).then((a) => {
     if (!a) return;
     try {
@@ -40,6 +51,13 @@ export function playCueText(cueKey: string, text: string) {
 
 export async function speakText(text: string): Promise<void> {
   if (!text) return;
+  // Skip if we just spoke this exact text, so prompts/answers don't repeat or
+  // stack on top of each other.
+  const now = Date.now();
+  const lastSpoken = lastSpokenByText.get(text) ?? 0;
+  if (now - lastSpoken < TTS_COOLDOWN) return;
+  lastSpokenByText.set(text, now);
+  lastSpeakAt = now;
   const a = await fetchTTS(text);
   if (!a) return;
   try {
