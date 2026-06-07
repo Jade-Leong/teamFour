@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Dumbbell, Bot, Wind, Flame } from "lucide-react";
+import { Dumbbell, Flame } from "lucide-react";
 import { BottomNav } from "@/components/BottomNav";
 import { Logo } from "@/components/Logo";
 import { useUserProfile } from "@/context/UserProfileContext";
@@ -81,8 +81,6 @@ function Dashboard() {
         {/* Quick actions */}
         <div className="flex gap-3 overflow-x-auto pb-2">
           <QuickAction to="/workouts" icon={<Dumbbell className="h-4 w-4" />} label="Start Workout" />
-          <QuickAction to="/coach" icon={<Bot className="h-4 w-4" />} label="AI Coach" />
-          <QuickAction to="/workout/$id" params={{ id: "breathing" }} icon={<Wind className="h-4 w-4" />} label="Calm Breathing" />
         </div>
 
         {/* Stats */}

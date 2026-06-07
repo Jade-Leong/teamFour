@@ -30,7 +30,7 @@ function Onboarding() {
   };
 
   const next = () => {
-    if (step === 5) { navigate({ to: "/dashboard" }); return; }
+    if (step === 5) { navigate({ to: "/building" }); return; }
     const i = steps.indexOf(step);
     setStep(steps[i + 1]);
   };
@@ -76,7 +76,7 @@ function Onboarding() {
             disabled={!canContinue()}
             className="btn-primary w-full disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {step === 5 ? "Meet Your Coach →" : "Continue →"}
+            {step === 5 ? "Build Your Workout →" : "Continue →"}
           </button>
           <p className="text-center text-[11px] italic text-muted-foreground">
             Bloom is not a substitute for medical advice. Always follow your doctor's recommendations.
