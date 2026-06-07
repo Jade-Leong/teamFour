@@ -6,16 +6,19 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview"
+    
   },
   "dependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "@mediapipe/pose": "^0.5.1675469404",
+    "@elevenlabs/elevenlabs-js": "^2.51.0",
     "@mediapipe/camera_utils": "^0.3.1675466862",
-    "@mediapipe/drawing_utils": "^0.3.1675466124"
+    "@mediapipe/drawing_utils": "^0.3.1675466124",
+    "@mediapipe/pose": "^0.5.1675469404",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
     "vite": "^6.0.0"
   }
+  
 }
