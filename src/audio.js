@@ -67,6 +67,9 @@ export async function precacheAudio() {
   }
 
   console.log(`[precacheAudio] ${cache.size} phrases ready`)
+
+  //to test 
+  playAudio('good_form')
 }
 
 export async function playAudio(cueKey) {
