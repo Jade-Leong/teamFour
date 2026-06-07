@@ -11,16 +11,21 @@ export const Route = createFileRoute("/profile")({
 function Profile() {
   const navigate = useNavigate();
   const { profile } = useUserProfile();
-  const initial = profile.firstName.charAt(0).toUpperCase();
-  const experienceLabel = {
-    after_loss: "Pregnant after loss",
-    first: "First-time pregnancy",
-    high_anxiety: "High-anxiety pregnancy",
-    general: "General pregnancy",
-  }[profile.experience ?? "general"];
-  const subline = profile.pregnancyStatus === "postpartum"
-    ? `Postpartum · ${experienceLabel}`
-    : `${profile.weeksPregnant} weeks pregnant · ${experienceLabel}`;
+  const initial = (profile.firstName || "?").charAt(0).toUpperCase();
+  const experienceLabel = profile.experience
+    ? {
+        after_loss: "Pregnant after loss",
+        first: "First-time pregnancy",
+        high_anxiety: "High-anxiety pregnancy",
+        general: "General pregnancy",
+      }[profile.experience]
+    : "Personalize your journey";
+  const subline =
+    profile.pregnancyStatus === "postpartum"
+      ? `Postpartum · ${experienceLabel}`
+      : profile.weeksPregnant
+      ? `${profile.weeksPregnant} weeks pregnant · ${experienceLabel}`
+      : experienceLabel;
 
   return (
     <div className="min-h-screen bg-background pb-28">
