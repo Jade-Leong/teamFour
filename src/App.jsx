@@ -26,7 +26,7 @@ import { precacheAudio, playAudio } from './audio'
 
 const REPS_PER_SET = 10
 const TOTAL_SETS = 3
-const CUE_COOLDOWN = 3000 // 3s between any audio cues
+const CUE_COOLDOWN = 7000 // 3s between any audio cues, just changed to 7s
 
 // --- Skeleton drawing -------------------------------------------------------
 
