@@ -9,11 +9,20 @@ export const Route = createFileRoute("/dashboard")({
   component: Dashboard,
 });
 
+const WEEKLY_GOAL = 4;
+const MINUTES_GOAL = 150;
+
 function Dashboard() {
   const { profile } = useUserProfile();
-  const status = profile.pregnancyStatus === "postpartum"
-    ? "Postpartum"
-    : `${profile.trimester ?? "2nd"} Trimester · ${profile.weeksPregnant} weeks pregnant`;
+  const { stats } = profile;
+  const status =
+    profile.pregnancyStatus === "postpartum"
+      ? "Postpartum"
+      : profile.trimester
+      ? `${profile.trimester} Trimester${profile.weeksPregnant ? ` · ${profile.weeksPregnant} weeks pregnant` : ""}`
+      : "Welcome to bloom";
+
+  const weeklyPct = Math.min(100, (stats.workoutsCompleted / WEEKLY_GOAL) * 100);
 
   return (
     <div className="min-h-screen bg-background pb-28">
@@ -37,7 +46,9 @@ function Dashboard() {
           <div className="mt-2 flex items-start justify-between gap-4">
             <div>
               <div className="font-serif text-2xl text-foreground">Lower Body Strength</div>
-              <div className="mt-1 text-sm text-muted-foreground">20 min · Moderate · 2nd Trimester</div>
+              <div className="mt-1 text-sm text-muted-foreground">
+                20 min · Moderate · {profile.trimester ? `${profile.trimester} Trimester` : "All Trimesters"}
+              </div>
             </div>
             <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-tint to-primary-light/40 text-2xl">
               🤰
@@ -52,12 +63,19 @@ function Dashboard() {
         <div className="card-bloom p-6">
           <div className="text-[11px] font-bold uppercase tracking-widest text-primary">This Week's Progress</div>
           <div className="mt-3 flex items-baseline justify-between">
-            <div className="text-sm font-semibold text-foreground">2 / 4 workouts</div>
-            <div className="text-xs text-muted-foreground">50%</div>
+            <div className="text-sm font-semibold text-foreground">
+              {stats.workoutsCompleted} / {WEEKLY_GOAL} workouts
+            </div>
+            <div className="text-xs text-muted-foreground">{Math.round(weeklyPct)}%</div>
           </div>
           <div className="mt-2 h-2 overflow-hidden rounded-full bg-primary-tint">
-            <div className="h-full bg-gradient-to-r from-primary to-primary-light" style={{ width: "50%" }} />
+            <div className="h-full bg-gradient-to-r from-primary to-primary-light transition-all" style={{ width: `${weeklyPct}%` }} />
           </div>
+          {stats.workoutsCompleted === 0 && (
+            <p className="mt-3 text-xs italic text-muted-foreground">
+              Your first session is just one tap away. 💜
+            </p>
+          )}
         </div>
 
         {/* Quick actions */}
@@ -69,9 +87,9 @@ function Dashboard() {
 
         {/* Stats */}
         <div className="grid grid-cols-3 gap-3">
-          <Stat label="Minutes Active" value="85" sub="/ 150" />
-          <Stat label="Streak" value="3" sub="days 🔥" icon={<Flame className="h-3 w-3" />} />
-          <Stat label="Confidence" value="82%" sub="💜" />
+          <Stat label="Minutes Active" value={String(stats.minutesActive)} sub={`/ ${MINUTES_GOAL}`} />
+          <Stat label="Streak" value={String(stats.streakDays)} sub={stats.streakDays === 0 ? "days" : "days 🔥"} icon={stats.streakDays > 0 ? <Flame className="h-3 w-3 text-warning" /> : null} />
+          <Stat label="Confidence" value={stats.confidence ? `${stats.confidence}%` : "—"} sub={stats.confidence ? "💜" : "start to see"} />
         </div>
       </main>
 
@@ -88,10 +106,13 @@ function QuickAction({ to, params, icon, label }: { to: any; params?: any; icon:
   );
 }
 
-function Stat({ label, value, sub }: { label: string; value: string; sub?: string; icon?: React.ReactNode }) {
+function Stat({ label, value, sub, icon }: { label: string; value: string; sub?: string; icon?: React.ReactNode }) {
   return (
     <div className="card-bloom p-4">
-      <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="flex items-center justify-between">
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</div>
+        {icon}
+      </div>
       <div className="mt-1.5 flex items-baseline gap-1">
         <span className="font-serif text-2xl text-primary-dark">{value}</span>
         {sub && <span className="text-xs text-muted-foreground">{sub}</span>}

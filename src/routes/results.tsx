@@ -7,40 +7,68 @@ export const Route = createFileRoute("/results")({
   component: Results,
 });
 
+const labelMap = { good: "Good", great: "Great", needs: "Needs a little more" } as const;
+const colorMap = { good: "bg-success", great: "bg-success", needs: "bg-warning" } as const;
+
 function Results() {
   const navigate = useNavigate();
   const { profile } = useUserProfile();
+  const s = profile.lastSession;
+
+  if (!s) {
+    return (
+      <div className="min-h-screen bg-background px-4 py-10">
+        <div className="mx-auto max-w-md text-center">
+          <h1 className="font-serif text-3xl">No session yet</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Complete a workout to see your form score and feedback here.
+          </p>
+          <button onClick={() => navigate({ to: "/workouts" })} className="btn-primary mt-6">
+            Browse workouts
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const label =
+    s.formScore >= 85 ? "Great" : s.formScore >= 70 ? "Good" : s.formScore > 0 ? "Keep going" : "—";
+  const mm = Math.floor(s.durationSec / 60).toString().padStart(2, "0");
+  const ss = (s.durationSec % 60).toString().padStart(2, "0");
+
   return (
     <div className="min-h-screen bg-background px-4 py-10">
       <div className="mx-auto max-w-xl space-y-5 animate-fade-up">
         <div className="text-center">
           <h1 className="font-serif text-4xl text-foreground">Great job, {profile.firstName}! 🎉</h1>
-          <p className="mt-1 text-sm text-muted-foreground">You completed Lower Body Strength</p>
+          <p className="mt-1 text-sm text-muted-foreground">You completed {s.name}</p>
         </div>
 
         <div className="card-bloom p-6 text-center">
-          <Ring value={82} label="Great" />
+          <Ring value={s.formScore} label={label} />
           <ul className="mt-6 space-y-3 text-left text-sm">
-            <Row color="bg-success" label="Knee Alignment" value="Good" />
-            <Row color="bg-success" label="Back Posture" value="Great" />
-            <Row color="bg-success" label="Depth" value="Good" />
-            <Row color="bg-warning" label="Core Engagement" value="Needs a little more" />
+            <Row color={colorMap[s.feedback.kneeAlignment]} label="Knee Alignment" value={labelMap[s.feedback.kneeAlignment]} />
+            <Row color={colorMap[s.feedback.backPosture]} label="Back Posture" value={labelMap[s.feedback.backPosture]} />
+            <Row color={colorMap[s.feedback.depth]} label="Depth" value={labelMap[s.feedback.depth]} />
+            <Row color={colorMap[s.feedback.coreEngagement]} label="Core Engagement" value={labelMap[s.feedback.coreEngagement]} />
           </ul>
         </div>
 
-        <div className="rounded-2xl bg-primary-tint p-5">
-          <div className="flex gap-3">
-            <span className="text-xl">💡</span>
-            <p className="text-sm text-primary-dark">
-              Your movement looked controlled. Try engaging your core slightly more throughout the exercise.
-            </p>
+        {s.formScore > 0 && (
+          <div className="rounded-2xl bg-primary-tint p-5">
+            <div className="flex gap-3">
+              <span className="text-xl">💡</span>
+              <p className="text-sm text-primary-dark">
+                Your movement looked controlled. Try engaging your core slightly more throughout the exercise.
+              </p>
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="grid grid-cols-3 gap-3">
-          <Chip label="Duration" value="20:15" />
-          <Chip label="Reps" value="24" />
-          <Chip label="Sets" value="3/3" />
+          <Chip label="Duration" value={`${mm}:${ss}`} />
+          <Chip label="Reps" value={String(s.reps)} />
+          <Chip label="Sets" value={`${s.setsCompleted}/${s.totalSets}`} />
         </div>
 
         <div className="space-y-3 pt-2">
