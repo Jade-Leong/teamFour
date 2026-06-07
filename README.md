@@ -23,8 +23,8 @@ Open the printed URL and allow camera access.
    (Bodyweight / Sumo / Chair-supported).
 3. **Positioning** — instructions for standing so the camera tracks you well.
 4. **Coaching** — live skeleton overlay, spoken cues, rep + set counter, and a
-   persistent **STOP** button. Target: 3 sets of 10–15 reps with a 30s rest
-   break after each set.
+   persistent **STOP** button. Sets advance automatically every 10 reps across
+   3 sets; stop any time with the STOP button.
 
 ## Coaching logic
 

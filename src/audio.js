@@ -21,84 +21,59 @@ import {
 // key -> HTMLAudioElement
 const cache = new Map()
 
-async function fetchTTS(text) {
-  const voiceId = import.meta.env.VITE_ELEVENLABS_VOICE_ID
-  const apiKey = import.meta.env.VITE_ELEVENLABS_API_KEY
-
-  if (!voiceId || !apiKey) {
-    console.warn('[ElevenLabs] Missing API key or voice ID')
-    return null
-  }
-
-  const response = await fetch(
-    `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'xi-api-key': apiKey,
-        Accept: 'audio/mpeg',
-      },
-      body: JSON.stringify({
-        text,
-        model_id: 'eleven_flash_v2_5',
-        voice_settings: {
-          stability: 0.65,
-          similarity_boost: 0.8,
-          style: 0.25,
-          use_speaker_boost: true,
-        },
-      }),
-    }
-  )
-
-  if (!response.ok) {
-    console.error('[ElevenLabs] TTS failed', await response.text())
-    return null
-  }
-
-  return await response.blob()
-}
-
+// Pre-cache every phrase at the start of a session. Syntheses run in parallel
+// and populate the cache as they resolve; a failed phrase just falls back to
+// on-demand synthesis (or a log) the first time it's needed.
 export async function precacheAudio() {
   cache.clear()
 
-  for (const [key, text] of Object.entries(PREGNANCY_PHRASES)) {
-    const blob = await fetchTTS(text)
-
-    if (!blob) continue
-
-    const url = URL.createObjectURL(blob)
-    cache.set(key, url)
-
-    console.log('[precacheAudio] cached', key)
+  if (!elevenLabsConfigured()) {
+    console.warn(
+      '[precacheAudio] ElevenLabs not configured — set VITE_ELEVENLABS_API_KEY ' +
+        'and VITE_ELEVENLABS_VOICE_ID in .env. Cues will log only.'
+    )
+    return
   }
 
-  console.log(`[precacheAudio] ${cache.size} phrases ready`)
-
-  //to test 
-  playAudio('good_form')
+  const entries = Object.entries(PREGNANCY_PHRASES)
+  await Promise.all(
+    entries.map(async ([key, text]) => {
+      try {
+        cache.set(key, await synthesizeSpeech(text))
+        console.log('[precacheAudio] cached', key)
+      } catch (e) {
+        console.warn('[precacheAudio] failed', key, '—', e.message)
+      }
+    })
+  )
+  console.log(`[precacheAudio] ${cache.size}/${entries.length} cues ready`)
 }
 
-export async function playAudio(cueKey) {
+// Play a cue by key. No-op-safe for unknown keys.
+export function playAudio(cueKey) {
   const text = PREGNANCY_PHRASES[cueKey]
-
   if (!text) {
     console.warn('[playAudio] unknown cue', cueKey)
     return
   }
 
-  let url = cache.get(cueKey)
-
-  if (!url) {
-    const blob = await fetchTTS(text)
-
-    if (!blob) return
-
-    url = URL.createObjectURL(blob)
-    cache.set(cueKey, url)
+  // Fast path: cached clip from session start.
+  const cached = cache.get(cueKey)
+  if (cached) {
+    cached.currentTime = 0
+    cached.play().catch((e) => console.warn('[playAudio] blocked', cueKey, '—', e.message))
+    return
   }
 
-  const audio = new Audio(url)
-  await audio.play()
+  // No credentials → placeholder log so the flow still works for demos.
+  if (!elevenLabsConfigured()) {
+    console.log('[playAudio]', cueKey, '→', text)
+    return
+  }
+
+  // Configured but not yet cached (e.g. cue fired before precache finished):
+  // synthesize + play on demand.
+  speakWithElevenLabs(text).catch((e) =>
+    console.warn('[playAudio] on-demand failed', cueKey, '—', e.message)
+  )
 }

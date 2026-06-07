@@ -2,7 +2,6 @@ import { useRef, useEffect, useState, useCallback } from 'react'
 import { Pose, POSE_CONNECTIONS } from '@mediapipe/pose'
 import { Camera } from '@mediapipe/camera_utils'
 import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils'
-import { playAudio } from './audio'
 
 import {
   STOP_SIGNS,
@@ -25,52 +24,9 @@ import { precacheAudio, playAudio } from './audio'
 
 // --- Session constants ------------------------------------------------------
 
-
-// --- Squat analysis ---
-
-function analyzeSquatAngles(lm) {
-  const leftKneeAngle  = getAngle({ x: lm[23].x, y: lm[23].y },
-                                   { x: lm[25].x, y: lm[25].y },
-                                   { x: lm[27].x, y: lm[27].y })
-
-  const rightKneeAngle = getAngle({ x: lm[24].x, y: lm[24].y },
-                                   { x: lm[26].x, y: lm[26].y },
-                                   { x: lm[28].x, y: lm[28].y })
-
-  const hipAngle       = getAngle({ x: lm[11].x, y: lm[11].y },
-                                   { x: lm[23].x, y: lm[23].y },
-                                   { x: lm[25].x, y: lm[25].y })
-
-  return { leftKneeAngle, rightKneeAngle, hipAngle }
-}
-
-function getSquatCue(leftKneeAngle, rightKneeAngle, hipAngle) {
-  const avgKnee = (leftKneeAngle + rightKneeAngle) / 2
-  const isInSquat = avgKnee < 160
-
-  if (!isInSquat) return null
-
-  if (avgKnee > 110)                               return 'go_deeper'
-  if (Math.abs(leftKneeAngle - rightKneeAngle) > 15) return 'knees_caving'
-  if (hipAngle < 50)                               return 'chest_up'
-  return 'good_form'
-}
-
-// --- Drawing helpers ---
-
-const SKELETON_COLOR = '#00e5ff'
-const JOINT_COLOR    = '#ff1744'
-
-function drawSkeleton(ctx, landmarks) {
-  drawConnectors(ctx, landmarks, POSE_CONNECTIONS, {
-    color: SKELETON_COLOR,
-    lineWidth: 2,
-  })
 const REPS_PER_SET = 10
 const TOTAL_SETS = 3
-const REST_SECONDS = 30
 const CUE_COOLDOWN = 3000 // 3s between any audio cues
-}
 
 // --- Skeleton drawing -------------------------------------------------------
 
@@ -111,8 +67,6 @@ export default function App() {
   const reachedDepthRef = useRef(false)
   const repsRef = useRef(0)
   const setsDoneRef = useRef(0)
-  const restingRef = useRef(false)
-  const restTimerRef = useRef(null)
   const frameCount = useRef(0)
 
   // --- Flow / UI state ---
@@ -126,8 +80,6 @@ export default function App() {
   const [session, setSession] = useState({
     reps: 0,
     set: 1,
-    resting: false,
-    restCountdown: 0,
   })
   const [status, setStatus] = useState({
     kneeAngle: '--',
@@ -151,40 +103,6 @@ export default function App() {
     return true
   }, [])
 
-  // --- Rest break between sets (pauses analysis for 30s) ---
-  const startRest = useCallback(() => {
-    restingRef.current = true
-    setsDoneRef.current += 1
-    repsRef.current = 0
-    playCue('rest_break', { bypassCooldown: true })
-
-    if (setsDoneRef.current >= TOTAL_SETS) {
-      setSession((s) => ({ ...s, reps: 0, resting: false }))
-      setScreen('complete')
-      return
-    }
-
-    let remaining = REST_SECONDS
-    setSession((s) => ({
-      ...s,
-      reps: 0,
-      set: setsDoneRef.current + 1,
-      resting: true,
-      restCountdown: remaining,
-    }))
-    clearInterval(restTimerRef.current)
-    restTimerRef.current = setInterval(() => {
-      remaining -= 1
-      if (remaining <= 0) {
-        clearInterval(restTimerRef.current)
-        restingRef.current = false
-        setSession((s) => ({ ...s, resting: false, restCountdown: 0 }))
-      } else {
-        setSession((s) => ({ ...s, restCountdown: remaining }))
-      }
-    }, 1000)
-  }, [playCue])
-
   // --- Per-frame analysis (stable; reads everything from refs) ---
   const onResults = useCallback((results) => {
     const canvas = canvasRef.current
@@ -206,16 +124,6 @@ export default function App() {
     }
 
     const tracked = bodyVisible(lm)
-
-    // Pause coaching (not the camera) during rest breaks — still draw skeleton.
-    if (restingRef.current) {
-      ctx.save()
-      ctx.scale(-1, 1)
-      ctx.translate(-w, 0)
-      drawSkeleton(ctx, lm, STATUS_COLORS.good)
-      ctx.restore()
-      return
-    }
 
     const rules = rulesRef.current
     if (!rules) return
@@ -245,8 +153,19 @@ export default function App() {
       if (repPhaseRef.current === 'down' && reachedDepthRef.current) {
         repsRef.current += 1
         reachedDepthRef.current = false
-        setSession((s) => ({ ...s, reps: repsRef.current }))
-        if (repsRef.current >= REPS_PER_SET) startRest()
+        if (repsRef.current >= REPS_PER_SET) {
+          // Set complete — roll straight into the next set, no rest break.
+          setsDoneRef.current += 1
+          repsRef.current = 0
+          if (setsDoneRef.current >= TOTAL_SETS) {
+            setSession((s) => ({ ...s, reps: 0 }))
+            setScreen('complete')
+          } else {
+            setSession((s) => ({ ...s, reps: 0, set: setsDoneRef.current + 1 }))
+          }
+        } else {
+          setSession((s) => ({ ...s, reps: repsRef.current }))
+        }
       }
       repPhaseRef.current = 'standing'
     } else {
@@ -280,7 +199,7 @@ export default function App() {
         tracked: true,
       })
     }
-  }, [playCue, startRest])
+  }, [playCue])
 
   // --- Camera lifecycle: only runs on the coaching screen ---
   useEffect(() => {
@@ -295,8 +214,7 @@ export default function App() {
     prevKneeRef.current = null
     lastCueTime.current = 0
     lastBreathTime.current = Date.now()
-    restingRef.current = false
-    setSession({ reps: 0, set: 1, resting: false, restCountdown: 0 })
+    setSession({ reps: 0, set: 1 })
     setLoading(true)
 
     precacheAudio() // session start
@@ -331,7 +249,6 @@ export default function App() {
 
     return () => {
       mountedRef.current = false
-      clearInterval(restTimerRef.current)
       try {
         cameraRef.current?.stop()
         poseRef.current?.close()
@@ -343,8 +260,6 @@ export default function App() {
 
   // --- Handlers ---
   const handleStop = () => {
-    clearInterval(restTimerRef.current)
-    restingRef.current = false
     setScreen('setup')
   }
 
@@ -436,29 +351,16 @@ export default function App() {
           <div style={S.veil}>Loading camera & model…</div>
         )}
 
-        {!loading && !status.tracked && !session.resting && (
+        {!loading && !status.tracked && (
           <div style={S.trackingHint}>
             Step back so your whole body — head to feet — is in frame
           </div>
         )}
 
         {/* Active coaching cue */}
-        {!session.resting && status.cue !== 'none' && (
+        {status.cue !== 'none' && (
           <div style={{ ...S.cueBanner, borderColor: status.color, color: status.color }}>
             {PREGNANCY_PHRASES[status.cue]}
-          </div>
-        )}
-
-        {/* Rest overlay */}
-        {session.resting && (
-          <div style={S.restOverlay}>
-            <div style={{ fontSize: 22, marginBottom: 8 }}>Rest break 💧</div>
-            <div style={{ fontSize: 56, fontWeight: 700, color: STATUS_COLORS.good }}>
-              {session.restCountdown}s
-            </div>
-            <div style={{ fontSize: 14, color: '#bbb', marginTop: 8 }}>
-              {PREGNANCY_PHRASES.rest_break}
-            </div>
           </div>
         )}
 
@@ -792,11 +694,6 @@ const S = {
     background: 'rgba(0,0,0,.78)', border: '2px solid', borderRadius: 12,
     padding: '10px 18px', fontSize: 17, fontWeight: 600, textAlign: 'center',
     maxWidth: '85%',
-  },
-  restOverlay: {
-    position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
-    alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,.82)',
-    borderRadius: 12, textAlign: 'center', padding: 20,
   },
   metrics: {
     position: 'absolute', bottom: 14, left: 14, background: 'rgba(0,0,0,.65)',

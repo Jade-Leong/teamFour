@@ -67,6 +67,7 @@ export const VARIATION_LABELS = {
 
 export const PREGNANCY_PHRASES = {
   widen_stance:        'Try widening your stance a bit for better balance',
+  narrow_stance:       'Bring your feet in a little, a narrower stance is easier on your hips',
   knees_over_toes:     'Keep your weight in your heels, your knees are going past your toes',
   back_straight:       'Keep your back nice and straight, lift through your chest',
   too_deep:            "That's deep enough, no need to go further",
@@ -75,7 +76,6 @@ export const PREGNANCY_PHRASES = {
   chest_up:            'Lift tall through your chest, take your time',
   remember_to_breathe: "Steady breathing, don't hold your breath",
   squeeze_glutes:      'Squeeze your glutes as you stand up',
-  rest_break:          'Great work, take a break, hydrate, and come back when ready',
   good_form:           "You're doing amazing",
 }
 
@@ -89,6 +89,7 @@ export const CUE_PRIORITY = [
   'knees_over_toes',
   'back_straight',
   'knees_caving',
+  'narrow_stance',
   'widen_stance',
   'chest_up',
   'too_deep',
@@ -103,6 +104,7 @@ export const CRITICAL_CUES = new Set(['knees_over_toes', 'back_straight'])
 export const ADJUST_CUES = new Set([
   'knees_caving',
   'widen_stance',
+  'narrow_stance',
   'chest_up',
   'too_deep',
 ])
@@ -126,7 +128,13 @@ export const LM = {
 export const STANDING_ANGLE = 160          // knee angle above this = standing
 const KNEE_OVER_TOES_THRESHOLD = 0.05      // normalized x: knee past toe
 const BACK_LEAN_RATIO = 0.35               // shoulder-vs-hip horizontal offset / torso length
-const STANCE_TOLERANCE = 0.9               // ankle width must reach 90% of target
+// Stance band, as a fraction of the target ankle/shoulder ratio. Prenatal
+// guidance (ACOG/Healthline) is feet shoulder-width to slightly wider, toes
+// turned out — wide enough for balance and belly room, but NOT so wide that it
+// strains the pelvis (relaxin-driven laxity raises pelvic-girdle-pain risk).
+// So we flag both too narrow and too wide.
+const STANCE_MIN_RATIO = 0.9               // below this fraction of target = too narrow
+const STANCE_MAX_RATIO = 1.3               // above this fraction of target = too wide
 const KNEE_DIVERGENCE = 10                 // deg; stricter than 15 due to relaxin
 const FORWARD_LEAN_HIP_ANGLE = 30          // hip angle below this = relaxed forward-lean flag
 const GLUTE_ASCENT_ANGLE = 130             // cue glutes when rising past this
@@ -204,8 +212,10 @@ export function getFormCues(metrics, rules, prevKnee = null) {
   } = metrics
 
   // Stance width — useful while standing too, so it's checked every frame.
+  // Flag both too narrow (balance) and too wide (pelvic strain).
   const targetStance = shoulderWidth * (rules.stanceMultiplier ?? 1)
-  if (ankleWidth < targetStance * STANCE_TOLERANCE) cues.push('widen_stance')
+  if (ankleWidth < targetStance * STANCE_MIN_RATIO) cues.push('widen_stance')
+  else if (ankleWidth > targetStance * STANCE_MAX_RATIO) cues.push('narrow_stance')
 
   if (inSquat) {
     // Most important rule per Healthline: knees drifting past the toes.
