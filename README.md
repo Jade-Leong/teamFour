@@ -1,17 +1,15 @@
-import React from "react";
-import ReactDOM from "react-dom/client";
-import App from "./App";
-import "./styles.css";
-
+# 1. Go into the export folder
 cd export
+
+# 2. Install dependencies (client + server)
 npm install
-cp server/.env.example server/.env   # add ELEVENLABS_API_KEY
+
+# 3. Set up your API key
+cp server/.env.example server/.env
+# then open server/.env in any editor and paste your ElevenLabs key:
+# ELEVENLABS_API_KEY=sk_your_key_here
+
+# 4. Start the app (frontend + backend together)
 npm run dev
 
-# client → http://localhost:5173, server → http://localhost:3001 (proxied at /api)
-
-ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+Then open http://localhost:5173 in your browser.
