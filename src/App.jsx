@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import SquatAnalyzer from './components/SquatAnalyzer'
+import SquatAnalyzer from './components/squatAnalyzer'
 
 export default function App() {
   const [screen, setScreen] = useState('home')
