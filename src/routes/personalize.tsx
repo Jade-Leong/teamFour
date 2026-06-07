@@ -10,25 +10,35 @@ function Personalize() {
   return (
     <div className="min-h-screen bg-background flex flex-col items-center px-5 py-6">
       <div className="w-full max-w-md flex-1 flex flex-col">
-        <div className="relative overflow-hidden rounded-[2rem] shadow-bloom-lg flex-1 min-h-[560px] flex flex-col justify-between p-6 bg-gradient-to-br from-[#E8DEFF] via-[#F2E8FF] to-[#FFE8F0]">
-          <img
-            src="https://images.unsplash.com/photo-1518611012118-696072aa579a?auto=format&fit=crop&w=900&q=80"
-            alt="Pregnant woman in calm pose"
-            className="absolute inset-0 h-full w-full object-cover opacity-95"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-black/10" />
+        <div className="relative overflow-hidden rounded-[2rem] shadow-bloom-lg flex-1 min-h-[560px] flex flex-col items-center justify-between p-8 text-center bg-gradient-to-br from-[#F3ECFF] via-[#EADCFF] to-[#FFE2EC]">
+          {/* Soft decorative blobs */}
+          <div className="pointer-events-none absolute -top-16 -left-16 h-64 w-64 rounded-full bg-primary/20 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-20 -right-12 h-72 w-72 rounded-full bg-[#FFB8D1]/40 blur-3xl" />
+          <div className="pointer-events-none absolute top-1/3 right-1/4 h-40 w-40 rounded-full bg-primary-light/30 blur-2xl" />
 
           <div className="relative z-10">
             <Logo />
           </div>
 
-          <div className="relative z-10 space-y-6">
-            <h1 className="text-white text-4xl leading-[1.1] font-bold tracking-tight">
-              Let's personalize<br />your experience.
-            </h1>
-            <p className="text-white/90 text-sm leading-relaxed max-w-xs">
-              This helps us provide workouts and guidance that are right for you.
-            </p>
+          {/* Center icon */}
+          <div className="relative z-10 flex flex-col items-center">
+            <div className="relative h-28 w-28">
+              <div className="absolute inset-0 rounded-full bg-white/60 backdrop-blur-sm shadow-bloom-lg" />
+              <div className="absolute inset-2 rounded-full bg-gradient-to-br from-primary to-primary-light flex items-center justify-center text-5xl shadow-bloom">
+                🌸
+              </div>
+            </div>
+          </div>
+
+          <div className="relative z-10 flex flex-col items-center space-y-6 w-full">
+            <div className="space-y-3">
+              <h1 className="text-primary-dark text-4xl leading-[1.1] font-bold tracking-tight">
+                Let's personalize<br />your experience.
+              </h1>
+              <p className="text-foreground/70 text-sm leading-relaxed max-w-xs mx-auto">
+                This helps us provide workouts and guidance that are right for you.
+              </p>
+            </div>
 
             <Link
               to="/onboarding"
