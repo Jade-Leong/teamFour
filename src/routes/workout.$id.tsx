@@ -1,132 +1,464 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
-import { Volume2, X, Sparkles, Play, Camera } from "lucide-react";
-import { toast } from "sonner";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Volume2, X, Sparkles, Play, Camera as CameraIcon, Mic } from "lucide-react";
 import { useUserProfile, type LastSession } from "@/context/UserProfileContext";
+import {
+  PREGNANCY_PHRASES,
+  STANDING_ANGLE,
+  STATUS_COLORS,
+  bodyVisible,
+  getFormCues,
+  getPoseMetrics,
+  getRules,
+  pickCue,
+  statusFromCues,
+  LM,
+  type Trimester,
+  type Variation,
+} from "@/lib/pregnancyRules";
+import { matchFaq } from "@/lib/faq";
+import { playCueText, speakText, stopSpeaking, transcribeBlob } from "@/lib/voice";
 
 export const Route = createFileRoute("/workout/$id")({
   head: () => ({ meta: [{ title: "Live workout · Juno" }] }),
   component: LiveWorkout,
 });
 
-const TARGET_REPS_PER_SET = 12;
+const REPS_PER_SET = 10;
 const TOTAL_SETS = 3;
-const TARGET_DURATION = 20 * 60; // seconds for full session (used by progress bar)
+const CUE_COOLDOWN = 7000;
+const TARGET_DURATION = 20 * 60;
 
 function LiveWorkout() {
   const navigate = useNavigate();
   const { recordSession } = useUserProfile();
-  const [started, setStarted] = useState(false);
-  const [elapsed, setElapsed] = useState(0); // seconds
-  const [reps, setReps] = useState(0);
-  const [set, setSet] = useState(1);
-  const repTimer = useRef<number | null>(null);
 
-  // tick timer + simulate rep cadence so the UI feels live
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const cameraRef = useRef<any>(null);
+  const poseRef = useRef<any>(null);
+  const mountedRef = useRef(true);
+
+  const rulesRef = useRef<any>(null);
+  const lastCueTime = useRef(0);
+  const lastBreathTime = useRef(0);
+  const prevKneeRef = useRef<number | null>(null);
+  const repPhaseRef = useRef<"standing" | "down">("standing");
+  const reachedDepthRef = useRef(false);
+  const repsRef = useRef(0);
+  const setsDoneRef = useRef(0);
+  const frameCount = useRef(0);
+  const qaActiveRef = useRef(false);
+  const drawUtilsRef = useRef<any>(null);
+  const startedAtRef = useRef(0);
+
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const micStreamRef = useRef<MediaStream | null>(null);
+
+  // For simplicity in the integrated app we pick sensible defaults for the
+  // medical rule set (2nd trimester, bodyweight). Could be wired to onboarding.
+  const trimester: Trimester = 2;
+  const variation: Variation = "bodyweight";
+
+  const [started, setStarted] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const [reps, setReps] = useState(0);
+  const [setNum, setSetNum] = useState(1);
+  const [tracked, setTracked] = useState(false);
+  const [activeCue, setActiveCue] = useState<string>("none");
+  const [statusColor, setStatusColor] = useState<string>(STATUS_COLORS.good);
+  const [kneeAngle, setKneeAngle] = useState<string>("--");
+  const [hipAngle, setHipAngle] = useState<string>("--");
+  const [loadingCam, setLoadingCam] = useState(false);
+
+  const [qa, setQa] = useState({
+    active: false,
+    completedSet: 0,
+    phase: "idle" as "idle" | "recording" | "transcribing" | "answering",
+    transcript: "",
+    answer: "",
+  });
+
+  useEffect(() => {
+    rulesRef.current = getRules(trimester, variation);
+  }, []);
+
+  // Tick session timer
   useEffect(() => {
     if (!started) return;
     const t = window.setInterval(() => setElapsed((e) => e + 1), 1000);
-    repTimer.current = window.setInterval(() => {
-      setReps((r) => {
-        if (r + 1 >= TARGET_REPS_PER_SET) {
-          setSet((s) => Math.min(TOTAL_SETS, s + 1));
-          return 0;
-        }
-        return r + 1;
-      });
-    }, 3500);
-    return () => {
-      window.clearInterval(t);
-      if (repTimer.current) window.clearInterval(repTimer.current);
-    };
+    return () => window.clearInterval(t);
   }, [started]);
 
-  const playVoice = () => {
-    toast("🔊 Voice coaching powered by ElevenLabs — coming soon", {
-      duration: 3000,
-      style: { background: "linear-gradient(135deg,#7C5CBF,#A78BDB)", color: "white", border: "none" },
-    });
+  const playCue = useCallback((key: string) => {
+    const now = Date.now();
+    if (now - lastCueTime.current < CUE_COOLDOWN) return false;
+    lastCueTime.current = now;
+    const text = PREGNANCY_PHRASES[key];
+    if (text) playCueText(key, text);
+    return true;
+  }, []);
+
+  const enterQA = useCallback(() => {
+    const completedSet = setsDoneRef.current + 1;
+    qaActiveRef.current = true;
+    setReps(REPS_PER_SET);
+    setQa({ active: true, completedSet, phase: "idle", transcript: "", answer: "" });
+    speakText(
+      `Set ${completedSet} done, nice work! Any questions for me? ` +
+        `Tap the microphone to ask, or continue when you're ready.`
+    );
+  }, []);
+
+  const onResults = useCallback(
+    (results: any) => {
+      const canvas = canvasRef.current;
+      const video = videoRef.current;
+      if (!canvas || !video) return;
+
+      const w = video.videoWidth || 640;
+      const h = video.videoHeight || 480;
+      if (canvas.width !== w) canvas.width = w;
+      if (canvas.height !== h) canvas.height = h;
+
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.clearRect(0, 0, w, h);
+
+      const lm = results.poseLandmarks;
+      if (!lm) {
+        if (mountedRef.current) setTracked(false);
+        return;
+      }
+
+      const isTracked = bodyVisible(lm);
+
+      const draw = drawUtilsRef.current;
+      const POSE_CONNECTIONS = draw?.POSE_CONNECTIONS;
+
+      if (qaActiveRef.current) {
+        ctx.save();
+        ctx.scale(-1, 1);
+        ctx.translate(-w, 0);
+        if (draw) {
+          draw.drawConnectors(ctx, lm, POSE_CONNECTIONS, {
+            color: STATUS_COLORS.good,
+            lineWidth: 3,
+          });
+          draw.drawLandmarks(ctx, lm, {
+            color: "#fff",
+            fillColor: STATUS_COLORS.good,
+            radius: 4,
+          });
+        }
+        ctx.restore();
+        return;
+      }
+
+      const rules = rulesRef.current;
+      if (!rules) return;
+
+      const metrics = getPoseMetrics(lm);
+      const cues = isTracked ? getFormCues(metrics, rules, prevKneeRef.current) : [];
+      const statusKey = statusFromCues(cues);
+      const color = STATUS_COLORS[statusKey];
+
+      ctx.save();
+      ctx.scale(-1, 1);
+      ctx.translate(-w, 0);
+      if (draw) {
+        draw.drawConnectors(ctx, lm, POSE_CONNECTIONS, {
+          color: isTracked ? color : "#888",
+          lineWidth: 3,
+        });
+        draw.drawLandmarks(ctx, lm, {
+          color: "#fff",
+          fillColor: isTracked ? color : "#888",
+          radius: 4,
+        });
+        draw.drawLandmarks(
+          ctx,
+          [lm[LM.LEFT_KNEE], lm[LM.RIGHT_KNEE]],
+          { color, fillColor: color, radius: 8 }
+        );
+      }
+      ctx.restore();
+
+      if (!isTracked) {
+        if (mountedRef.current) setTracked(false);
+        return;
+      }
+
+      const now = Date.now();
+
+      const { avgKnee } = metrics;
+      if (avgKnee > STANDING_ANGLE) {
+        if (repPhaseRef.current === "down" && reachedDepthRef.current) {
+          repsRef.current += 1;
+          reachedDepthRef.current = false;
+          if (repsRef.current >= REPS_PER_SET) {
+            enterQA();
+          } else {
+            setReps(repsRef.current);
+          }
+        }
+        repPhaseRef.current = "standing";
+      } else {
+        repPhaseRef.current = "down";
+        if (avgKnee >= rules.minKnee && avgKnee <= rules.maxKnee) {
+          reachedDepthRef.current = true;
+        }
+      }
+
+      const breathDue = now - lastBreathTime.current >= rules.breathInterval;
+      const candidateCues = breathDue ? [...cues, "remember_to_breathe"] : cues;
+      const chosen = pickCue(candidateCues);
+      if (chosen) {
+        const fired = playCue(chosen);
+        if (fired && chosen === "remember_to_breathe") lastBreathTime.current = now;
+      }
+
+      prevKneeRef.current = avgKnee;
+
+      frameCount.current += 1;
+      if (frameCount.current % 6 === 0 && mountedRef.current) {
+        setTracked(true);
+        setKneeAngle(avgKnee.toFixed(0));
+        setHipAngle(metrics.hipAngle.toFixed(0));
+        setActiveCue(chosen ?? "none");
+        setStatusColor(color);
+      }
+    },
+    [playCue, enterQA]
+  );
+
+  // Camera / pose lifecycle (only after user presses Begin)
+  useEffect(() => {
+    if (!started) return;
+    mountedRef.current = true;
+    setLoadingCam(true);
+
+    repsRef.current = 0;
+    setsDoneRef.current = 0;
+    reachedDepthRef.current = false;
+    repPhaseRef.current = "standing";
+    prevKneeRef.current = null;
+    lastCueTime.current = 0;
+    lastBreathTime.current = Date.now();
+    qaActiveRef.current = false;
+    startedAtRef.current = Date.now();
+    setReps(0);
+    setSetNum(1);
+
+    let cancelled = false;
+    (async () => {
+      const [{ Pose, POSE_CONNECTIONS }, { Camera }, drawing] = await Promise.all([
+        import("@mediapipe/pose"),
+        import("@mediapipe/camera_utils"),
+        import("@mediapipe/drawing_utils"),
+      ]);
+      if (cancelled) return;
+      drawUtilsRef.current = {
+        drawConnectors: drawing.drawConnectors,
+        drawLandmarks: drawing.drawLandmarks,
+        POSE_CONNECTIONS,
+      };
+
+      const pose = new Pose({
+        locateFile: (file: string) =>
+          `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${file}`,
+      });
+      pose.setOptions({
+        modelComplexity: 1,
+        smoothLandmarks: true,
+        enableSegmentation: false,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5,
+      });
+      pose.onResults(onResults);
+      poseRef.current = pose;
+
+      if (!videoRef.current) return;
+      const camera = new Camera(videoRef.current, {
+        onFrame: async () => {
+          if (videoRef.current && poseRef.current) {
+            await poseRef.current.send({ image: videoRef.current });
+          }
+        },
+        width: 640,
+        height: 480,
+      });
+      cameraRef.current = camera;
+      camera.start().then(() => {
+        if (mountedRef.current) setLoadingCam(false);
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+      mountedRef.current = false;
+      try {
+        cameraRef.current?.stop();
+        poseRef.current?.close();
+        micStreamRef.current?.getTracks().forEach((t) => t.stop());
+        stopSpeaking();
+      } catch (e) {
+        console.warn("[cleanup]", e);
+      }
+    };
+  }, [started, onResults]);
+
+  const onRecordingStop = async () => {
+    micStreamRef.current?.getTracks().forEach((t) => t.stop());
+    const type = mediaRecorderRef.current?.mimeType || "audio/webm";
+    const blob = new Blob(audioChunksRef.current, { type });
+
+    setQa((q) => ({ ...q, phase: "transcribing" }));
+    const transcript = await transcribeBlob(blob);
+    if (!transcript) {
+      setQa((q) => ({
+        ...q,
+        phase: "idle",
+        transcript: "",
+        answer: "I didn't catch that — tap the mic and try again.",
+      }));
+      return;
+    }
+    const { answer } = matchFaq(transcript);
+    setQa((q) => ({ ...q, phase: "answering", transcript, answer }));
+    await speakText(answer);
+    setQa((q) => ({ ...q, phase: "idle" }));
   };
 
-  const handleEnd = () => {
-    const formScore = started ? Math.min(95, 70 + Math.floor(elapsed / 30)) : 0;
-    const totalReps = (set - 1) * TARGET_REPS_PER_SET + reps;
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      micStreamRef.current = stream;
+      const mr = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+      mr.ondataavailable = (e) => {
+        if (e.data.size) audioChunksRef.current.push(e.data);
+      };
+      mr.onstop = onRecordingStop;
+      mediaRecorderRef.current = mr;
+      mr.start();
+      setQa((q) => ({ ...q, phase: "recording", transcript: "", answer: "" }));
+    } catch (e) {
+      console.warn("[mic] error", e);
+      setQa((q) => ({
+        ...q,
+        phase: "idle",
+        answer: "I could not access the microphone — check your browser permissions.",
+      }));
+    }
+  };
+
+  const stopRecording = () => {
+    const mr = mediaRecorderRef.current;
+    if (mr && mr.state !== "inactive") mr.stop();
+  };
+
+  const continueFromQA = () => {
+    const mr = mediaRecorderRef.current;
+    if (mr && mr.state !== "inactive") {
+      mr.onstop = null;
+      mr.stop();
+    }
+    micStreamRef.current?.getTracks().forEach((t) => t.stop());
+
+    setsDoneRef.current += 1;
+    repsRef.current = 0;
+    reachedDepthRef.current = false;
+    repPhaseRef.current = "standing";
+    prevKneeRef.current = null;
+    lastBreathTime.current = Date.now();
+    qaActiveRef.current = false;
+    setQa({ active: false, completedSet: 0, phase: "idle", transcript: "", answer: "" });
+
+    if (setsDoneRef.current >= TOTAL_SETS) {
+      finishSession();
+    } else {
+      setReps(0);
+      setSetNum(setsDoneRef.current + 1);
+    }
+  };
+
+  const finishSession = () => {
+    const durationSec = Math.max(1, Math.round((Date.now() - startedAtRef.current) / 1000));
+    const totalReps = setsDoneRef.current * REPS_PER_SET + repsRef.current;
+    const formScore = Math.min(95, 70 + Math.floor(durationSec / 30));
     const session: LastSession = {
-      name: "Lower Body Strength",
-      durationSec: elapsed,
+      name: "Pregnancy-Safe Squats",
+      durationSec,
       reps: totalReps,
-      setsCompleted: Math.max(0, set - 1) + (reps > 0 ? 1 : 0),
+      setsCompleted: setsDoneRef.current,
       totalSets: TOTAL_SETS,
       formScore,
       feedback: {
         kneeAlignment: "good",
         backPosture: "great",
         depth: "good",
-        coreEngagement: started ? "needs" : "needs",
+        coreEngagement: "needs",
       },
     };
-    if (started && elapsed > 0) recordSession(session);
+    if (started && durationSec > 0) recordSession(session);
     navigate({ to: "/mood" });
+  };
+
+  const handleEnd = () => {
+    finishSession();
   };
 
   const mm = Math.floor(elapsed / 60).toString().padStart(2, "0");
   const ss = (elapsed % 60).toString().padStart(2, "0");
   const sessionPct = Math.min(100, (elapsed / TARGET_DURATION) * 100);
-  const setPct = (reps / TARGET_REPS_PER_SET) * 100;
+  const setPct = (reps / REPS_PER_SET) * 100;
 
   return (
     <div className="min-h-screen bg-[#0F0F0F] text-white">
       <div className="mx-auto grid max-w-7xl gap-4 p-4 lg:grid-cols-[1.85fr_1fr] lg:p-6">
-        {/* CAMERA / MOTION-DETECTION ZONE (square) */}
+        {/* CAMERA */}
         <div>
           <div className="relative mx-auto aspect-square w-full max-w-[640px] overflow-hidden rounded-3xl bg-[#1A1A1A] ring-1 ring-white/10">
-            {/*
-              ─────────────────────────────────────────────────────────────
-              MEDIAPIPE MOTION DETECTION MOUNT POINT
-              Replace the placeholder content below with:
-                <video ref={videoRef} className="absolute inset-0 h-full w-full object-cover" />
-                <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
-              Initialize MediaPipe Pose / Tasks Vision inside a useEffect
-              and draw landmarks onto the canvas.
-              ─────────────────────────────────────────────────────────────
-            */}
-
-            {/* corner brackets to mark the detection zone */}
-            {["top-3 left-3 border-l-2 border-t-2", "top-3 right-3 border-r-2 border-t-2", "bottom-3 left-3 border-l-2 border-b-2", "bottom-3 right-3 border-r-2 border-b-2"].map((c) => (
-              <span key={c} className={`absolute ${c} h-6 w-6 rounded-md border-primary-light/70`} />
+            {/* corner brackets */}
+            {[
+              "top-3 left-3 border-l-2 border-t-2",
+              "top-3 right-3 border-r-2 border-t-2",
+              "bottom-3 left-3 border-l-2 border-b-2",
+              "bottom-3 right-3 border-r-2 border-b-2",
+            ].map((c) => (
+              <span key={c} className={`absolute ${c} h-6 w-6 rounded-md border-primary-light/70 z-20 pointer-events-none`} />
             ))}
 
-            {/* subtle grid */}
-            <svg className="absolute inset-0 h-full w-full opacity-15" xmlns="http://www.w3.org/2000/svg">
-              <defs>
-                <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                  <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#A78BDB" strokeWidth="0.5" />
-                </pattern>
-              </defs>
-              <rect width="100%" height="100%" fill="url(#grid)" />
-            </svg>
-
-            <div className="absolute left-4 top-4 z-10 font-serif text-base lowercase text-white/60">juno</div>
-            <div className="absolute left-1/2 top-4 z-10 -translate-x-1/2 rounded-full bg-white/15 px-4 py-1.5 text-xs font-semibold backdrop-blur">
+            <div className="absolute left-4 top-4 z-20 font-serif text-base lowercase text-white/60">juno</div>
+            <div className="absolute left-1/2 top-4 z-20 -translate-x-1/2 rounded-full bg-white/15 px-4 py-1.5 text-xs font-semibold backdrop-blur">
               Pregnancy-Safe Squat
             </div>
-            <button
-              onClick={playVoice}
-              className="absolute right-4 top-4 z-10 flex items-center gap-2 rounded-full bg-white px-3.5 py-2 text-xs font-semibold text-primary-dark shadow-bloom transition-transform hover:scale-105"
-            >
-              <Volume2 className="h-4 w-4" /> Voice Coach
-            </button>
 
-            {/* Center: Start screen OR pose skeleton */}
-            {!started ? (
-              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-5 px-6 text-center">
+            {/* video + canvas (mirrored) */}
+            <video
+              ref={videoRef}
+              playsInline
+              muted
+              className="absolute inset-0 h-full w-full object-cover"
+              style={{ transform: "scaleX(-1)" }}
+            />
+            <canvas
+              ref={canvasRef}
+              className="absolute inset-0 h-full w-full"
+            />
+
+            {/* Pre-start overlay */}
+            {!started && (
+              <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-5 bg-black/60 px-6 text-center backdrop-blur-sm">
                 <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/10 backdrop-blur">
-                  <Camera className="h-7 w-7 text-primary-light" />
+                  <CameraIcon className="h-7 w-7 text-primary-light" />
                 </div>
                 <div>
                   <h2 className="font-serif text-2xl">Motion Detection Zone</h2>
                   <p className="mt-1 max-w-xs text-xs text-white/60">
-                    Stand inside the frame so your full body is visible. We'll start tracking when you press Begin.
+                    Place your camera 6–8 ft away, hip height. Stand so your whole body — head to feet — is in frame.
                   </p>
                 </div>
                 <button
@@ -136,65 +468,104 @@ function LiveWorkout() {
                   <Play className="h-4 w-4" fill="currentColor" /> Begin Workout
                 </button>
                 <p className="text-[10px] uppercase tracking-widest text-white/30">
-                  MediaPipe pose tracking will mount here
+                  MediaPipe pose tracking
                 </p>
               </div>
-            ) : (
-              <>
-                {/* Live pose skeleton */}
-                <svg viewBox="0 0 400 400" className="absolute inset-0 h-full w-full">
-                  <defs>
-                    <filter id="glow"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-                  </defs>
-                  <g stroke="#A78BDB" strokeWidth="3" strokeLinecap="round" opacity="0.9" filter="url(#glow)">
-                    <line x1="200" y1="110" x2="200" y2="170" />
-                    <line x1="160" y1="160" x2="240" y2="160" />
-                    <line x1="160" y1="160" x2="140" y2="220" />
-                    <line x1="140" y1="220" x2="155" y2="265" />
-                    <line x1="240" y1="160" x2="260" y2="220" />
-                    <line x1="260" y1="220" x2="245" y2="265" />
-                    <line x1="200" y1="170" x2="200" y2="235" />
-                    <line x1="175" y1="235" x2="225" y2="235" />
-                    <line x1="175" y1="235" x2="155" y2="295" />
-                    <line x1="155" y1="295" x2="170" y2="355" />
-                    <line x1="225" y1="235" x2="245" y2="295" />
-                    <line x1="245" y1="295" x2="230" y2="355" />
-                  </g>
-                  {[
-                    [200, 100], [160, 160], [240, 160], [140, 220], [260, 220], [155, 265], [245, 265],
-                    [175, 235], [225, 235], [155, 295], [245, 295], [170, 355], [230, 355],
-                  ].map(([x, y], i) => (
-                    <circle key={i} cx={x} cy={y} r="6" fill="#C9B5F0" filter="url(#glow)" />
-                  ))}
-                </svg>
-
-                {/* Floating coach cards appear as session progresses */}
-                {elapsed > 4 && <FloatCard pos="left-4 top-20" emoji="💜" text="Great posture! Keep your chest open." />}
-                {elapsed > 10 && <FloatCard pos="right-4 top-24" emoji="✓" text="Engage core gently." color="text-primary" />}
-                {elapsed > 18 && <FloatCard pos="left-4 bottom-28" emoji="⭐" text="Stable & grounded." />}
-                {elapsed > 25 && <FloatCard pos="right-4 bottom-32" emoji="✅" text="Knees aligned with toes." color="text-success" />}
-              </>
             )}
 
-            {/* Bottom: timer + reps + progress bar */}
-            <div className="absolute bottom-0 left-0 right-0 z-10 space-y-2 bg-gradient-to-t from-black/70 to-transparent p-4">
+            {started && loadingCam && (
+              <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/70 text-sm text-white/70">
+                Loading camera & model…
+              </div>
+            )}
+
+            {started && !loadingCam && !tracked && !qa.active && (
+              <div className="absolute left-1/2 top-16 z-20 -translate-x-1/2 rounded-full border border-warning/60 bg-warning/15 px-3 py-1.5 text-xs text-warning">
+                Step back so your whole body fits in frame
+              </div>
+            )}
+
+            {/* Active coaching cue banner */}
+            {started && !qa.active && activeCue !== "none" && PREGNANCY_PHRASES[activeCue] && (
+              <div
+                className="absolute left-1/2 top-16 z-20 max-w-[85%] -translate-x-1/2 rounded-2xl border-2 bg-black/70 px-4 py-2 text-center text-sm font-semibold backdrop-blur"
+                style={{ borderColor: statusColor, color: statusColor }}
+              >
+                {PREGNANCY_PHRASES[activeCue]}
+              </div>
+            )}
+
+            {/* Between-sets Q&A overlay */}
+            {qa.active && (
+              <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 bg-black/85 px-6 text-center backdrop-blur">
+                <div className="font-serif text-2xl">Set {qa.completedSet} done! 🎉</div>
+                <div className="text-sm text-white/70">
+                  Any questions? Tap the mic to ask — or continue.
+                </div>
+                <button
+                  onClick={qa.phase === "recording" ? stopRecording : startRecording}
+                  disabled={qa.phase === "transcribing" || qa.phase === "answering"}
+                  className={`flex items-center gap-2 rounded-full px-7 py-3 text-sm font-semibold shadow-bloom transition-transform hover:scale-105 disabled:opacity-60 ${
+                    qa.phase === "recording"
+                      ? "bg-destructive text-white"
+                      : "bg-gradient-to-r from-primary to-primary-light text-white"
+                  }`}
+                >
+                  <Mic className="h-4 w-4" />
+                  {qa.phase === "recording"
+                    ? "Stop & send"
+                    : qa.phase === "transcribing"
+                    ? "Transcribing…"
+                    : qa.phase === "answering"
+                    ? "Answering…"
+                    : "Tap to ask"}
+                </button>
+                {qa.transcript && (
+                  <div className="max-w-[80%] text-sm italic text-primary-light">
+                    "{qa.transcript}"
+                  </div>
+                )}
+                {qa.answer && (
+                  <div className="max-w-[85%] rounded-2xl border border-success/40 bg-success/10 px-4 py-3 text-sm leading-relaxed text-white">
+                    {qa.answer}
+                  </div>
+                )}
+                <button
+                  onClick={continueFromQA}
+                  className="rounded-full bg-white/10 px-6 py-2.5 text-sm font-semibold hover:bg-white/20"
+                >
+                  {qa.completedSet >= TOTAL_SETS ? "Finish session" : "Continue to next set →"}
+                </button>
+              </div>
+            )}
+
+            {/* Bottom HUD */}
+            <div className="absolute bottom-0 left-0 right-0 z-20 space-y-2 bg-gradient-to-t from-black/70 to-transparent p-4">
               {started && (
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-widest text-white/70">
-                    <span>Set {set} · {reps}/{TARGET_REPS_PER_SET} reps</span>
+                    <span>
+                      Set {setNum} · {reps}/{REPS_PER_SET} reps
+                    </span>
                     <span>{Math.round(setPct)}%</span>
                   </div>
                   <div className="h-1.5 overflow-hidden rounded-full bg-white/15">
-                    <div className="h-full rounded-full bg-gradient-to-r from-primary to-primary-light transition-all" style={{ width: `${setPct}%` }} />
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-primary to-primary-light transition-all"
+                      style={{ width: `${setPct}%` }}
+                    />
                   </div>
                   <div className="h-0.5 overflow-hidden rounded-full bg-white/10">
-                    <div className="h-full bg-white/40 transition-all" style={{ width: `${sessionPct}%` }} />
+                    <div
+                      className="h-full bg-white/40 transition-all"
+                      style={{ width: `${sessionPct}%` }}
+                    />
                   </div>
                 </div>
               )}
               <div className="flex justify-between gap-2">
                 <Stat v={String(reps)} l="REPS" />
-                <Stat v={`${set}/${TOTAL_SETS}`} l="SET" />
+                <Stat v={`${setNum}/${TOTAL_SETS}`} l="SET" />
                 <Stat v={`${mm}:${ss}`} l="⏱ TIME" />
               </div>
             </div>
@@ -213,17 +584,29 @@ function LiveWorkout() {
                 Feedback will appear once you start moving.
               </div>
             ) : (
-              <>
-                <ul className="mt-4 space-y-3 text-sm">
-                  {elapsed > 4 && <FeedbackRow color="bg-success" label="Great posture" />}
-                  {elapsed > 10 && <FeedbackRow color="bg-success" label="Knees aligned" />}
-                  {elapsed > 18 && <FeedbackRow color="bg-warning" label="Engage core gently" />}
-                  {elapsed > 25 && <FeedbackRow color="bg-success" label="Move at a comfortable pace" />}
-                  {elapsed <= 4 && <li className="text-xs italic text-muted-foreground">Reading your form…</li>}
-                </ul>
-                <p className="mt-4 italic text-xs text-primary">"Listening to your body is the best guide."</p>
-              </>
+              <ul className="mt-4 space-y-3 text-sm">
+                <li className="flex items-center gap-3">
+                  <span
+                    className="h-2.5 w-2.5 rounded-full"
+                    style={{ background: statusColor }}
+                  />
+                  <span className="text-foreground">
+                    {activeCue !== "none" && PREGNANCY_PHRASES[activeCue]
+                      ? PREGNANCY_PHRASES[activeCue]
+                      : tracked
+                      ? "Looking great — keep going."
+                      : "Reading your form…"}
+                  </span>
+                </li>
+                <li className="text-xs text-muted-foreground">
+                  Knee <span className="font-mono" style={{ color: statusColor }}>{kneeAngle}°</span> · Hip{" "}
+                  <span className="font-mono text-success">{hipAngle}°</span>
+                </li>
+              </ul>
             )}
+            <p className="mt-4 text-xs italic text-primary">
+              "Listening to your body is the best guide."
+            </p>
           </div>
 
           <div className="card-bloom p-5">
@@ -233,21 +616,12 @@ function LiveWorkout() {
             </div>
             <div className="relative mt-3 rounded-2xl bg-primary-tint p-4 text-sm text-primary-dark">
               {started
-                ? "You're moving beautifully today. Take it slow and listen to your body."
-                : "Press Begin when you're ready — I'll guide you through every rep."}
+                ? "Voice cues are powered by ElevenLabs. Between sets, tap the mic to ask me anything."
+                : "Press Begin when you're ready — I'll guide you through every rep with spoken cues."}
             </div>
             <div className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Volume2 className="h-3 w-3" /> Voice Coach
+              <Volume2 className="h-3 w-3" /> ElevenLabs Voice Coach
             </div>
-          </div>
-
-          <div className="card-bloom p-5 text-center">
-            <ConfidenceRing value={started ? Math.min(95, 60 + Math.floor(elapsed / 4)) : 0} />
-            <p className="mt-3 text-xs text-muted-foreground">
-              {started
-                ? "You're building strength and confidence one step at a time. 💜"
-                : "Your confidence score will appear once you start."}
-            </p>
           </div>
         </aside>
       </div>
@@ -255,7 +629,7 @@ function LiveWorkout() {
       <div className="mx-auto max-w-7xl px-4 pb-6 lg:px-6">
         <div className="flex items-center justify-between gap-4 rounded-2xl bg-[#1A1A1A] px-5 py-4 ring-1 ring-white/5">
           <p className="flex-1 text-xs italic text-white/60">
-            Remember: Stop if you feel pain, dizziness, bleeding, contractions, or anything unusual. Always follow your clinician's advice.
+            Stop if you feel pain, dizziness, bleeding, contractions, or anything unusual. Always follow your clinician's advice.
           </p>
           <button
             onClick={handleEnd}
@@ -274,46 +648,6 @@ function Stat({ v, l }: { v: string; l: string }) {
     <div className="flex-1 rounded-2xl bg-white/10 px-3 py-2 text-center backdrop-blur">
       <div className="text-lg font-bold">{v}</div>
       <div className="text-[10px] text-white/60">{l}</div>
-    </div>
-  );
-}
-
-function FloatCard({ pos, emoji, text, color = "text-primary-dark" }: { pos: string; emoji: string; text: string; color?: string }) {
-  return (
-    <div className={`absolute ${pos} z-10 max-w-[200px] animate-fade-up rounded-2xl bg-white p-3 text-[11px] font-medium shadow-bloom ${color}`}>
-      <span className="mr-1.5">{emoji}</span>{text}
-    </div>
-  );
-}
-
-function FeedbackRow({ color, label }: { color: string; label: string }) {
-  return (
-    <li className="flex animate-fade-up items-center gap-3">
-      <span className={`h-2.5 w-2.5 rounded-full ${color}`} />
-      <span className="text-foreground">{label}</span>
-    </li>
-  );
-}
-
-function ConfidenceRing({ value }: { value: number }) {
-  const r = 42, c = 2 * Math.PI * r;
-  const off = c - (value / 100) * c;
-  return (
-    <div className="relative mx-auto h-28 w-28">
-      <svg viewBox="0 0 100 100" className="h-full w-full -rotate-90">
-        <circle cx="50" cy="50" r={r} stroke="var(--primary-tint)" strokeWidth="8" fill="none" />
-        <circle cx="50" cy="50" r={r} stroke="url(#g)" strokeWidth="8" fill="none" strokeLinecap="round"
-          strokeDasharray={c} strokeDashoffset={off} className="transition-all duration-500" />
-        <defs>
-          <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
-            <stop offset="0%" stopColor="#7C5CBF" /><stop offset="100%" stopColor="#A78BDB" />
-          </linearGradient>
-        </defs>
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <div className="font-serif text-2xl text-primary-dark">{value}%</div>
-        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Confidence</div>
-      </div>
     </div>
   );
 }
