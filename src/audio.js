@@ -24,15 +24,41 @@ export function precacheAudio() {
     console.log('[precacheAudio] cached', key, '→', text)
   }
   console.log(`[precacheAudio] ${cache.size} phrases ready`)
+
+  //testing
+  playAudio('good_form')
 }
 
 // Play a cue by key. No-op-safe for unknown keys.
-export function playAudio(cueKey) {
+export async function playAudio(cueKey) {
   const text = cache.get(cueKey) ?? PREGNANCY_PHRASES[cueKey]
   if (!text) {
     console.warn('[playAudio] unknown cue', cueKey)
     return
   }
   // TODO(elevenlabs): cache.get(cueKey).play()
-  console.log('[playAudio]', cueKey, '→', text)
+ const voiceId = import.meta.env.VITE_ELEVENLABS_VOICE_ID
+const apiKey = import.meta.env.VITE_ELEVENLABS_API_KEY
+
+fetch(
+  `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+  {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'xi-api-key': apiKey,
+      Accept: 'audio/mpeg',
+    },
+    body: JSON.stringify({
+      text,
+      model_id: 'eleven_flash_v2_5',
+    }),
+  }
+)
+  .then((res) => res.blob())
+  .then((blob) => {
+    const url = URL.createObjectURL(blob)
+    const audio = new Audio(url)
+    audio.play()
+  })
 }
