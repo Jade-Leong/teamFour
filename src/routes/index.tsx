@@ -33,11 +33,13 @@ function Landing() {
 
           {/* Heading + CTA bottom */}
           <div className="relative z-10 space-y-6">
-            <h1 className="text-white text-4xl leading-[1.1] font-bold tracking-tight">
-              Move with<br />confidence.
+            <h1 className="text-white text-4xl leading-[1.1] font-bold tracking-tight whitespace-pre-line">
+              Safe movement.{"\n"}
+              Stronger you.{"\n"}
+              Confident tomorrow.
             </h1>
             <p className="text-white/90 text-sm leading-relaxed max-w-xs">
-              AI-powered exercise coaching for every step of your pregnancy journey.
+              AI-powered exercise coaching for every step of your pregnancy or postpartum journey.
             </p>
 
             <Link
