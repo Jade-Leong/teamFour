@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-const VOICE_ID = "EXAVITQu4vr4xnSDxMaL"; // Sarah - warm, friendly
+const VOICE_ID = "gmv0PPPs8m6FEf03PImj";
 
 export const Route = createFileRoute("/api/tts")({
   server: {
