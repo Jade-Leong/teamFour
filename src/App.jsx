@@ -2,6 +2,7 @@ import { useRef, useEffect, useState, useCallback } from 'react'
 import { Pose, POSE_CONNECTIONS } from '@mediapipe/pose'
 import { Camera } from '@mediapipe/camera_utils'
 import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils'
+import { playAudio } from './audio'
 
 import {
   STOP_SIGNS,
@@ -24,10 +25,52 @@ import { precacheAudio, playAudio } from './audio'
 
 // --- Session constants ------------------------------------------------------
 
+
+// --- Squat analysis ---
+
+function analyzeSquatAngles(lm) {
+  const leftKneeAngle  = getAngle({ x: lm[23].x, y: lm[23].y },
+                                   { x: lm[25].x, y: lm[25].y },
+                                   { x: lm[27].x, y: lm[27].y })
+
+  const rightKneeAngle = getAngle({ x: lm[24].x, y: lm[24].y },
+                                   { x: lm[26].x, y: lm[26].y },
+                                   { x: lm[28].x, y: lm[28].y })
+
+  const hipAngle       = getAngle({ x: lm[11].x, y: lm[11].y },
+                                   { x: lm[23].x, y: lm[23].y },
+                                   { x: lm[25].x, y: lm[25].y })
+
+  return { leftKneeAngle, rightKneeAngle, hipAngle }
+}
+
+function getSquatCue(leftKneeAngle, rightKneeAngle, hipAngle) {
+  const avgKnee = (leftKneeAngle + rightKneeAngle) / 2
+  const isInSquat = avgKnee < 160
+
+  if (!isInSquat) return null
+
+  if (avgKnee > 110)                               return 'go_deeper'
+  if (Math.abs(leftKneeAngle - rightKneeAngle) > 15) return 'knees_caving'
+  if (hipAngle < 50)                               return 'chest_up'
+  return 'good_form'
+}
+
+// --- Drawing helpers ---
+
+const SKELETON_COLOR = '#00e5ff'
+const JOINT_COLOR    = '#ff1744'
+
+function drawSkeleton(ctx, landmarks) {
+  drawConnectors(ctx, landmarks, POSE_CONNECTIONS, {
+    color: SKELETON_COLOR,
+    lineWidth: 2,
+  })
 const REPS_PER_SET = 10
 const TOTAL_SETS = 3
 const REST_SECONDS = 30
 const CUE_COOLDOWN = 3000 // 3s between any audio cues
+}
 
 // --- Skeleton drawing -------------------------------------------------------
 
