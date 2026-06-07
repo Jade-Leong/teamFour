@@ -2,10 +2,7 @@ import { useRef, useEffect, useState, useCallback } from 'react'
 import { Pose, POSE_CONNECTIONS } from '@mediapipe/pose'
 import { Camera } from '@mediapipe/camera_utils'
 import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils'
-<<<<<<< HEAD
 import { playAudio } from './audio'
-=======
->>>>>>> origin/main
 
 import {
   STOP_SIGNS,
@@ -28,7 +25,6 @@ import { precacheAudio, playAudio } from './audio'
 
 // --- Session constants ------------------------------------------------------
 
-<<<<<<< HEAD
 
 // --- Squat analysis ---
 
@@ -70,17 +66,16 @@ function drawSkeleton(ctx, landmarks) {
     color: SKELETON_COLOR,
     lineWidth: 2,
   })
-=======
 const REPS_PER_SET = 10
 const TOTAL_SETS = 3
 const REST_SECONDS = 30
 const CUE_COOLDOWN = 3000 // 3s between any audio cues
+}
 
 // --- Skeleton drawing -------------------------------------------------------
 
 function drawSkeleton(ctx, landmarks, color) {
   drawConnectors(ctx, landmarks, POSE_CONNECTIONS, { color, lineWidth: 3 })
->>>>>>> origin/main
   drawLandmarks(ctx, landmarks, {
     color: '#ffffff',
     fillColor: color,
