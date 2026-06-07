@@ -23,6 +23,8 @@ import { Route as CoachRouteImport } from './routes/coach'
 import { Route as BuildingRouteImport } from './routes/building'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as WorkoutIdRouteImport } from './routes/workout.$id'
+import { Route as ApiTtsRouteImport } from './routes/api/tts'
+import { Route as ApiSttRouteImport } from './routes/api/stt'
 
 const WorkoutsRoute = WorkoutsRouteImport.update({
   id: '/workouts',
@@ -94,6 +96,16 @@ const WorkoutIdRoute = WorkoutIdRouteImport.update({
   path: '/workout/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiTtsRoute = ApiTtsRouteImport.update({
+  id: '/api/tts',
+  path: '/api/tts',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSttRoute = ApiSttRouteImport.update({
+  id: '/api/stt',
+  path: '/api/stt',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -109,6 +121,8 @@ export interface FileRoutesByFullPath {
   '/results': typeof ResultsRoute
   '/signup': typeof SignupRoute
   '/workouts': typeof WorkoutsRoute
+  '/api/stt': typeof ApiSttRoute
+  '/api/tts': typeof ApiTtsRoute
   '/workout/$id': typeof WorkoutIdRoute
 }
 export interface FileRoutesByTo {
@@ -125,6 +139,8 @@ export interface FileRoutesByTo {
   '/results': typeof ResultsRoute
   '/signup': typeof SignupRoute
   '/workouts': typeof WorkoutsRoute
+  '/api/stt': typeof ApiSttRoute
+  '/api/tts': typeof ApiTtsRoute
   '/workout/$id': typeof WorkoutIdRoute
 }
 export interface FileRoutesById {
@@ -142,6 +158,8 @@ export interface FileRoutesById {
   '/results': typeof ResultsRoute
   '/signup': typeof SignupRoute
   '/workouts': typeof WorkoutsRoute
+  '/api/stt': typeof ApiSttRoute
+  '/api/tts': typeof ApiTtsRoute
   '/workout/$id': typeof WorkoutIdRoute
 }
 export interface FileRouteTypes {
@@ -160,6 +178,8 @@ export interface FileRouteTypes {
     | '/results'
     | '/signup'
     | '/workouts'
+    | '/api/stt'
+    | '/api/tts'
     | '/workout/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -176,6 +196,8 @@ export interface FileRouteTypes {
     | '/results'
     | '/signup'
     | '/workouts'
+    | '/api/stt'
+    | '/api/tts'
     | '/workout/$id'
   id:
     | '__root__'
@@ -192,6 +214,8 @@ export interface FileRouteTypes {
     | '/results'
     | '/signup'
     | '/workouts'
+    | '/api/stt'
+    | '/api/tts'
     | '/workout/$id'
   fileRoutesById: FileRoutesById
 }
@@ -209,6 +233,8 @@ export interface RootRouteChildren {
   ResultsRoute: typeof ResultsRoute
   SignupRoute: typeof SignupRoute
   WorkoutsRoute: typeof WorkoutsRoute
+  ApiSttRoute: typeof ApiSttRoute
+  ApiTtsRoute: typeof ApiTtsRoute
   WorkoutIdRoute: typeof WorkoutIdRoute
 }
 
@@ -312,6 +338,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WorkoutIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/tts': {
+      id: '/api/tts'
+      path: '/api/tts'
+      fullPath: '/api/tts'
+      preLoaderRoute: typeof ApiTtsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/stt': {
+      id: '/api/stt'
+      path: '/api/stt'
+      fullPath: '/api/stt'
+      preLoaderRoute: typeof ApiSttRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -329,18 +369,10 @@ const rootRouteChildren: RootRouteChildren = {
   ResultsRoute: ResultsRoute,
   SignupRoute: SignupRoute,
   WorkoutsRoute: WorkoutsRoute,
+  ApiSttRoute: ApiSttRoute,
+  ApiTtsRoute: ApiTtsRoute,
   WorkoutIdRoute: WorkoutIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
