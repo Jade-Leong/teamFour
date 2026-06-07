@@ -35,19 +35,27 @@ Open the printed URL and allow camera access.
   width, knee cave (stricter 10° due to relaxin joint laxity), depth (only
   ever flags *too deep* — never pushes lower), relaxed forward-lean, timed
   breath reminders, and an ascending-phase glute cue.
-- **Audio** cues are spoken one at a time by priority with a 3s cooldown.
-  ElevenLabs TTS is stubbed (`src/audio.js`) as `console.log` placeholders for
-  now; phrases are "pre-cached" at session start.
+- **Audio** cues are spoken one at a time by priority with a 3s cooldown,
+  voiced by ElevenLabs TTS. All phrases are pre-synthesized at session start so
+  playback during the squat loop is instant; a cache miss synthesizes on demand.
+
+## ElevenLabs setup
+
+Copy `.env.example` to `.env` and fill in your credentials:
+
+```bash
+VITE_ELEVENLABS_API_KEY=...
+VITE_ELEVENLABS_VOICE_ID=...
+```
+
+Then restart `npm run dev`. Without these, the app still runs fully and logs
+cues to the console instead of speaking them.
 
 ## Files
 
 - `src/pregnancyRules.js` — rule tables, phrases, stop signs, and pure
   pose-analysis helpers.
-- `src/audio.js` — audio cue layer (ElevenLabs placeholder).
+- `src/services/elevenlabs.js` — ElevenLabs TTS calls (synthesize + play).
+- `src/audio.js` — cue layer: pre-caches and plays cues, with graceful
+  fallback when ElevenLabs isn't configured.
 - `src/App.jsx` — flow, screens, MediaPipe wiring, rep counting, and overlay.
-
-
-Using ElevenLabs to get the `cue` from MediaPipe
-
-go deeper
-knees caving chest up 
