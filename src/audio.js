@@ -80,3 +80,25 @@ export async function precacheAudio() {
   playAudio('good_form')
 }
 
+export async function playAudio(cueKey) {
+  const text = PREGNANCY_PHRASES[cueKey]
+
+  if (!text) {
+    console.warn('[playAudio] unknown cue', cueKey)
+    return
+  }
+
+  let url = cache.get(cueKey)
+
+  if (!url) {
+    const blob = await fetchTTS(text)
+
+    if (!blob) return
+
+    url = URL.createObjectURL(blob)
+    cache.set(cueKey, url)
+  }
+
+  const audio = new Audio(url)
+  await audio.play()
+}

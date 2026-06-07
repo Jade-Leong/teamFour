@@ -21,7 +21,7 @@ import {
   statusFromCues,
   bodyVisible,
 } from './pregnancyRules'
-import { precacheAudio, playAudio } from './audio'
+import { precacheAudio } from './audio'
 
 // --- Session constants ------------------------------------------------------
 
