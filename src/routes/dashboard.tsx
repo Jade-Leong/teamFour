@@ -78,10 +78,6 @@ function Dashboard() {
           )}
         </div>
 
-        {/* Quick actions */}
-        <div className="flex gap-3 overflow-x-auto pb-2">
-          <QuickAction to="/workouts" icon={<Dumbbell className="h-4 w-4" />} label="Start Workout" />
-        </div>
 
         {/* Stats */}
         <div className="grid grid-cols-3 gap-3">
