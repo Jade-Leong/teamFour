@@ -63,3 +63,19 @@ export function playAudio(cueKey) {
     console.warn('[playAudio] on-demand failed', cueKey, '—', e.message)
   )
 }
+
+// Speak arbitrary text (used by the between-sets Q&A assistant — prompts and FAQ
+// answers aren't in PREGNANCY_PHRASES). Resolves when playback finishes so the
+// caller can sequence UI state. Logs instead when ElevenLabs isn't configured.
+export async function speakText(text) {
+  if (!text) return
+  if (!elevenLabsConfigured()) {
+    console.log('[speakText]', text)
+    return
+  }
+  try {
+    await speakWithElevenLabs(text)
+  } catch (e) {
+    console.warn('[speakText] failed —', e.message)
+  }
+}
