@@ -1,11 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
 
+// Same config + call style as the squat-coach STT backend
+// (src/services/elevenlabs.js → transcribeSpeech): ElevenLabs Scribe v1,
+// reading the key from the project's existing .env (VITE_ name, with a
+// server-style fallback).
+const ELEVENLABS_API_KEY =
+  process.env.ELEVENLABS_API_KEY || process.env.VITE_ELEVENLABS_API_KEY;
+
 export const Route = createFileRoute("/api/stt")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const apiKey = process.env.ELEVENLABS_API_KEY;
-        if (!apiKey) {
+        if (!ELEVENLABS_API_KEY) {
           return new Response(JSON.stringify({ text: "" }), { status: 500 });
         }
         const incoming = await request.formData();
@@ -19,7 +25,7 @@ export const Route = createFileRoute("/api/stt")({
 
         const r = await fetch("https://api.elevenlabs.io/v1/speech-to-text", {
           method: "POST",
-          headers: { "xi-api-key": apiKey },
+          headers: { "xi-api-key": ELEVENLABS_API_KEY },
           body: form,
         });
         if (!r.ok) {

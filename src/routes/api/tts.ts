@@ -1,13 +1,21 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-const VOICE_ID = "gmv0PPPs8m6FEf03PImj";
+// Config matches the squat-coach ElevenLabs backend (src/services/elevenlabs.js):
+// read the key + voice from the same .env this project already uses. Accept the
+// VITE_-prefixed names (what .env actually defines) and fall back to the plain
+// server-style names so it works either way.
+const ELEVENLABS_API_KEY =
+  process.env.ELEVENLABS_API_KEY || process.env.VITE_ELEVENLABS_API_KEY;
+const VOICE_ID =
+  process.env.ELEVENLABS_VOICE_ID ||
+  process.env.VITE_ELEVENLABS_VOICE_ID ||
+  "gmv0PPPs8m6FEf03PImj";
 
 export const Route = createFileRoute("/api/tts")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const apiKey = process.env.ELEVENLABS_API_KEY;
-        if (!apiKey) {
+        if (!ELEVENLABS_API_KEY) {
           return new Response("ElevenLabs not configured", { status: 500 });
         }
         const { text } = (await request.json()) as { text?: string };
@@ -18,8 +26,9 @@ export const Route = createFileRoute("/api/tts")({
           {
             method: "POST",
             headers: {
-              "xi-api-key": apiKey,
+              "xi-api-key": ELEVENLABS_API_KEY,
               "Content-Type": "application/json",
+              Accept: "audio/mpeg",
             },
             body: JSON.stringify({
               text,
