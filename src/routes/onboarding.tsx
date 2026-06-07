@@ -52,7 +52,7 @@ function Onboarding() {
       </header>
 
       <main className="flex-1 px-6 pb-32">
-        <div className="mx-auto max-w-xl">
+        <div className="mx-auto max-w-md">
           {stepIndex > 0 && (
             <button onClick={back} className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-primary">
               <ArrowLeft className="h-4 w-4" /> Back
@@ -70,7 +70,7 @@ function Onboarding() {
       </main>
 
       <footer className="fixed bottom-0 left-0 right-0 border-t border-border bg-white/95 px-6 py-4 backdrop-blur-md">
-        <div className="mx-auto flex max-w-xl flex-col gap-3">
+        <div className="mx-auto flex max-w-md flex-col gap-3">
           <button
             onClick={next}
             disabled={!canContinue()}
