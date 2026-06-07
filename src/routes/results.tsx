@@ -3,7 +3,7 @@ import { Share2 } from "lucide-react";
 import { useUserProfile } from "@/context/UserProfileContext";
 
 export const Route = createFileRoute("/results")({
-  head: () => ({ meta: [{ title: "Results · bloom" }] }),
+  head: () => ({ meta: [{ title: "Results · Juno" }] }),
   component: Results,
 });
 

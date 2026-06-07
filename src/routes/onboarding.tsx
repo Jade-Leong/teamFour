@@ -5,7 +5,7 @@ import { Logo } from "@/components/Logo";
 import { useUserProfile, type Experience, type FitnessLevel, type PregnancyStatus, type Trimester } from "@/context/UserProfileContext";
 
 export const Route = createFileRoute("/onboarding")({
-  head: () => ({ meta: [{ title: "Personalize · bloom" }] }),
+  head: () => ({ meta: [{ title: "Personalize · Juno" }] }),
   component: Onboarding,
 });
 
@@ -79,7 +79,7 @@ function Onboarding() {
             {step === 5 ? "Build Your Workout →" : "Continue →"}
           </button>
           <p className="text-center text-[11px] italic text-muted-foreground">
-            Bloom is not a substitute for medical advice. Always follow your doctor's recommendations.
+            Juno is not a substitute for medical advice. Always follow your doctor's recommendations.
           </p>
         </div>
       </footer>

@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { useUserProfile, type LastSession } from "@/context/UserProfileContext";
 
 export const Route = createFileRoute("/workout/$id")({
-  head: () => ({ meta: [{ title: "Live workout · bloom" }] }),
+  head: () => ({ meta: [{ title: "Live workout · Juno" }] }),
   component: LiveWorkout,
 });
 
@@ -106,7 +106,7 @@ function LiveWorkout() {
               <rect width="100%" height="100%" fill="url(#grid)" />
             </svg>
 
-            <div className="absolute left-4 top-4 z-10 font-serif text-base lowercase text-white/60">bloom</div>
+            <div className="absolute left-4 top-4 z-10 font-serif text-base lowercase text-white/60">juno</div>
             <div className="absolute left-1/2 top-4 z-10 -translate-x-1/2 rounded-full bg-white/15 px-4 py-1.5 text-xs font-semibold backdrop-blur">
               Pregnancy-Safe Squat
             </div>

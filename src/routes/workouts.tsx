@@ -4,7 +4,7 @@ import { Search, ChevronRight } from "lucide-react";
 import { BottomNav } from "@/components/BottomNav";
 
 export const Route = createFileRoute("/workouts")({
-  head: () => ({ meta: [{ title: "Workouts · bloom" }] }),
+  head: () => ({ meta: [{ title: "Workouts · Juno" }] }),
   component: Workouts,
 });
 

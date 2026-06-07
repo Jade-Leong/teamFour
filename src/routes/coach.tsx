@@ -4,7 +4,7 @@ import { Send, Sparkles, Heart } from "lucide-react";
 import { BottomNav } from "@/components/BottomNav";
 
 export const Route = createFileRoute("/coach")({
-  head: () => ({ meta: [{ title: "AI Coach · bloom" }] }),
+  head: () => ({ meta: [{ title: "AI Coach · Juno" }] }),
   component: Coach,
 });
 
@@ -63,7 +63,7 @@ function Coach() {
           </button>
         </div>
         <p className="mx-auto mt-2 max-w-md text-center text-[10px] italic text-muted-foreground">
-          Bloom AI is not a substitute for medical advice. Always follow your doctor's recommendations.
+          Juno AI is not a substitute for medical advice. Always follow your doctor's recommendations.
         </p>
       </div>
 
