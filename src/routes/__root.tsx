@@ -11,6 +11,7 @@ import { useEffect, type ReactNode } from "react";
 import { Toaster } from "sonner";
 
 import appCss from "../styles.css?url";
+import favicon from "../assets/favicon.png?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { UserProfileProvider } from "../context/UserProfileContext";
 
@@ -82,6 +83,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         href: "https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap",
       },
       { rel: "stylesheet", href: appCss },
+      { rel: "icon", type: "image/png", href: favicon },
     ],
   }),
   shellComponent: RootShell,
