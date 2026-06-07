@@ -2,7 +2,7 @@ import { useRef, useEffect, useState, useCallback } from 'react'
 import { Pose, POSE_CONNECTIONS } from '@mediapipe/pose'
 import { Camera } from '@mediapipe/camera_utils'
 import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils'
-import { speakWithElevenLabs } from './audio'
+import { playAudio } from './audio'
 
 // --- Pure math helpers ---
 
@@ -14,21 +14,6 @@ function getAngle(a, b, c) {
   return angle
 }
 
-// --- Placeholder — ElevenLabs wiring comes later ---
-async function playAudio(cueKey) {
-  const PHRASES = {
-    go_deeper: "Try going a little deeper",
-    knees_caving: "Gently press your knees outward, track them over your toes",
-    chest_up: "Lift tall through your chest, take your time",
-    good_form: "You're doing amazing"
-  }
-
-  const text = PHRASES[cueKey]
-
-  if (!text) return
-
-  await speakWithElevenLabs(text)
-}
 
 // --- Squat analysis ---
 
