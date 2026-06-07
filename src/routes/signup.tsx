@@ -32,7 +32,7 @@ function Signup() {
   const handleSubmit = () => {
     const firstName = fullName.trim().split(/\s+/)[0] || "Friend";
     updateProfile({ firstName, email, username });
-    navigate({ to: "/onboarding" });
+    navigate({ to: "/personalize" });
   };
 
   return (
